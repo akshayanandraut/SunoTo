@@ -13,7 +13,8 @@
     "worker:build": "vite build --config worker/vite.config.js --configLoader native",
     "worker:deploy": "wrangler deploy --config worker/wrangler.toml",
     "production:validate": "node scripts/validate-production-config.mjs",
-    "staging:smoke": "node scripts/staging-smoke.mjs"
+    "staging:smoke": "node scripts/staging-smoke.mjs",
+    "launch:validate": "node scripts/validate-launch-evidence.mjs"
   },
   "devDependencies": {
     "vite": "^7.1.3",
