@@ -32,7 +32,7 @@ export class ChatSession{
   async webSocketMessage(socket,raw){
     const parsed=parseClientEvent(raw);if(!parsed.ok)return socket.send(serverEvent("MESSAGE_REJECTED",{code:parsed.code}));
     const event=parsed.event,attachment=socket.deserializeAttachment(),now=Date.now();let session=(await this.state.storage.get(SESSION_KEY))||{participants:{},disconnects:{}};if(!session.participants?.[attachment.participantId]){try{socket.close(4001,"account_takeover")}catch{}return;}
-    session.participants[attachment.participantId]={...session.participants[attachment.participantId],lastActivityAt:now,idle:false};
+    session.participants[attachment.participantId]={...session.participants[attachment.participantId],lastActivityAt:now,idle:false,warned:false};
     if(event.type==="CHAT_MESSAGE")await this.handleMessage(socket,attachment.participantId,event,session,now);
     else if(event.type==="HELLO"||event.type==="SESSION_RESUME")socket.send(serverEvent("READY",{participantId:attachment.participantId,resumeToken:attachment.resumeToken,resumed:event.type==="SESSION_RESUME"}));
     else if(event.type==="HEARTBEAT"||event.type==="ACTIVITY")socket.send(serverEvent("TIMER_STATE",{...timerState(session.startedAt||now,now,SESSION_DEFAULTS),idle:false}));
