@@ -59,6 +59,16 @@ Requests are temporary and online-only. Decline, expiry or either identity going
 
 Admin access requires a verified Supabase session whose user ID exactly matches the Worker's secret `ADMIN_USER_ID`. Frontend visibility is never treated as authorization.
 
+Admin operations additionally require an AAL2/MFA Supabase access token unless `ADMIN_REQUIRE_AAL2=false` is explicitly set for isolated local development. Available server-authorized routes include:
+
+- `GET /api/v1/admin/dashboard`, `/users`, `/users/:id/ledger`, `/reports`, `/restrictions`, `/offers`, `/coupons`, and `/audit`.
+- `POST /api/v1/admin/wallet` for an integer ledger adjustment with reason and operation ID.
+- `POST /api/v1/admin/restrictions` for restrict, ban, or clear with a required reason.
+- `POST /api/v1/admin/promotions` for validated offer/coupon creation or updates.
+- `GET|PUT /api/v1/admin/ads` and `/virtual` for versioned configuration.
+
+Admin wallet operations are idempotent and never update balances directly. Restriction, promotion, wallet and configuration changes write an audit row transactionally.
+
 ## Virtual fallback
 
 When enabled in server configuration, `GET /api/v1/match/result` may return `virtual: true`, `matchMode: "virtual_fallback"`, a public virtual profile and `preferenceFee: 0`. Random searches remain human-only for at least 15 seconds; paid preference/radius searches remain human-only for their full 30/45-second timeout. Virtual provider configuration and persona prompts are not exposed by the public API.

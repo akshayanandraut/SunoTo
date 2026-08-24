@@ -12,8 +12,9 @@ function virtualPeerFrom(value){if(!value||value.length>6000)return null;try{con
 export class ChatSession{
   constructor(state,env){this.state=state;this.env=env}
   async fetch(request){
+    const requestUrl=new URL(request.url);if(request.method==="POST"&&requestUrl.pathname==="/admin/end"){const session=(await this.state.storage.get(SESSION_KEY))||{participants:{}};session.ended=true;this.broadcast("SESSION_ENDED",{reason:"account_restricted"});await this.saveSession(session);return Response.json({ended:true});}
     if(request.headers.get("Upgrade")?.toLowerCase()!=="websocket")return Response.json({error:"websocket_upgrade_required"},{status:426});
-    const active=this.state.getWebSockets(),url=new URL(request.url),requestedToken=url.searchParams.get("resumeToken"),claimedIdentity=url.searchParams.get("identityId"),virtualPeer=virtualPeerFrom(url.searchParams.get("virtualPeer"));
+    const active=this.state.getWebSockets(),url=requestUrl,requestedToken=url.searchParams.get("resumeToken"),claimedIdentity=url.searchParams.get("identityId"),virtualPeer=virtualPeerFrom(url.searchParams.get("virtualPeer"));
     const participants=(await this.state.storage.get(PARTICIPANTS_KEY))||{},resumed=Object.entries(participants).find(([,value])=>value.resumeToken===requestedToken);
     if(!resumed&&active.length>=2)return Response.json({error:"session_full"},{status:409});
     const participantId=resumed?.[0]||(claimedIdentity?.match(/^[a-zA-Z0-9_-]{8,100}$/)?.[0])||crypto.randomUUID(),resumeToken=resumed?.[1].resumeToken||crypto.randomUUID(),now=Date.now(),accountUserId=resumed?.[1].accountUserId||url.searchParams.get("accountUserId")||null,virtual=resumed?.[1].virtual||url.searchParams.get("virtual")==="1";

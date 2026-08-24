@@ -45,6 +45,8 @@ Phase 19 adds a disabled-by-default, swappable ad provider boundary and the thre
 
 Phase 20 adds disabled-by-default virtual fallback for cold starts. Humans always have priority; random searches wait at least 15 seconds and paid-preference searches wait their full timeout. Virtual matches are visibly marked, cost no preference or message Credits, end after the free two minutes, and use a replaceable mock/Workers AI provider. At match start they either wait or send one configurable short greeting, then remain silent until the human replies.
 
+Phase 21 replaces the admin shell with a server-authorized operations portal for exact live room counts, accounts, wallets/ledgers, reports, restrictions, offers/coupons, ads, virtual configuration and audit history. The configured super-admin must use a verified Supabase session at AAL2/MFA. Wallet, moderation, promotion and configuration writes are versioned or idempotent, transactionally audited, and active restrictions immediately end affected rooms.
+
 The frontend is a local interactive prototype with anonymous browser identity, remembered onboarding preferences, IndexedDB history/favourites and same-browser tab ownership. Production deployment is intentionally not implemented yet.
 
 ## Checks
