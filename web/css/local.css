@@ -2,3 +2,4 @@
 .saved-list{display:grid;gap:10px;margin:24px 0}
 .saved-item{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px;border:1px solid var(--line);border-radius:15px;background:white}
 .saved-item p{margin:3px 0 0;font-size:.82rem}
+.chat-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 14px 0}.chat-actions .btn{padding:8px 12px}.chat-actions select{padding:8px;border:1px solid var(--line);border-radius:12px;background:white}
