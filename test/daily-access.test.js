@@ -2,9 +2,11 @@ import { describe,it } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { DailyAccessService } from "../worker/src/services/DailyAccessService.js";
+import { activateRequiredDailyAccess } from "../worker/src/index.js";
 
 describe("daily access service",()=>{
   it("uses only the privileged transactional RPC",async()=>{let request;const service=new DailyAccessService({url:"https://project.supabase.co",serviceKey:"service",fetcher:async(url,options)=>{request={url,options};return Response.json([{balance:9800,idempotent:false,ends_at:"2026-08-26T18:30:00Z"}]);}});const result=await service.activate({userId:"user-1",activationTime:"2026-08-25T12:00:00Z"});assert.equal(result.balance,9800);assert.match(request.url,/rpc\/activate_daily_access$/);assert.equal(request.options.headers.authorization,"Bearer service");assert.equal(JSON.parse(request.options.body).target_user_id,"user-1");});
+  it("activates only after server trial eligibility is exhausted",async()=>{let calls=0;const env={SUPABASE_URL:"https://project",SUPABASE_SERVICE_ROLE_KEY:"service"},fetcher=async()=>{calls++;return Response.json([{balance:9800}]);};assert.equal(await activateRequiredDailyAccess({eligibility:{accountRequired:false},user:null,env,fetcher}),null);assert.equal(calls,0);await activateRequiredDailyAccess({eligibility:{accountRequired:true},user:{id:"user-1",emailVerified:true},env,fetcher});assert.equal(calls,1);await assert.rejects(()=>activateRequiredDailyAccess({eligibility:{accountRequired:true},user:{id:"user-1",emailVerified:false},env,fetcher}),/verified_account_required/);});
 });
 
 describe("phase 11 database safeguards",()=>{
