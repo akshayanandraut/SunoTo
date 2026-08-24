@@ -4,6 +4,7 @@ import { SESSION_DEFAULTS } from "../config/defaults.js";
 import { normalizeMatchProfile,normalizePaidPreferences } from "../policies/preferencePolicy.js";
 import { PreferenceChargeService } from "../services/PreferenceChargeService.js";
 import { WalletService } from "../services/WalletService.js";
+import { ConfigService } from "../services/ConfigService.js";
 const STATE_KEY="matchmaking_state";
 const ID_PATTERN=/^[a-zA-Z0-9_-]{8,100}$/;
 export class MatchmakingShard{
@@ -16,7 +17,7 @@ export class MatchmakingShard{
       await this.setPresence(body.identityId,result.status==="matched"?"chatting":"waiting");if(result.peerId)await this.setPresence(result.peerId,"chatting");return Response.json(result,{status:result.status==="already_active"?409:200});
     }
     const resultMatch=url.pathname.match(/^\/result\/([a-zA-Z0-9_-]{8,100})$/);
-    if(request.method==="GET"&&resultMatch){try{const result=service.result(resultMatch[1]);await this.state.storage.put(STATE_KEY,service.snapshot());return Response.json(result);}catch(error){return Response.json({error:error.message},{status:400});}}
+    if(request.method==="GET"&&resultMatch){try{let result=service.result(resultMatch[1]);if(result.status==="searching"){try{const virtual=await new ConfigService(this.env,this.env.FETCHER||fetch).virtual();result=service.virtualFallback(resultMatch[1],virtual.config);}catch{}}await this.state.storage.put(STATE_KEY,service.snapshot());if(result.status==="matched"&&result.virtual)await this.setPresence(resultMatch[1],"chatting");return Response.json(result);}catch(error){return Response.json({error:error.message},{status:400});}}
     if(request.method==="POST"&&url.pathname==="/cancel"){
       const body=await request.json();if(!ID_PATTERN.test(body.identityId||""))return Response.json({error:"invalid_identity"},{status:400});const result=service.cancel(body.identityId);await this.state.storage.put(STATE_KEY,service.snapshot());await this.setPresence(body.identityId,"online");return Response.json(result);
     }
@@ -37,7 +38,7 @@ export class MatchmakingShard{
       const body=await request.json(),pending=service.reconnectRequests[body.requestId];if(!pending||pending.targetId!==body.targetId)return Response.json({error:"reconnect_request_not_found"},{status:404});if(body.accepted!==true){delete service.reconnectRequests[body.requestId];await this.state.storage.put(STATE_KEY,service.snapshot());return Response.json({status:"declined"});}const [initiatorPresence,targetPresence]=await Promise.all([this.getPresence(pending.initiatorId),this.getPresence(pending.targetId)]);if(!initiatorPresence.online||!targetPresence.online){delete service.reconnectRequests[body.requestId];await this.state.storage.put(STATE_KEY,service.snapshot());return Response.json({status:"offline"});}const result=service.activateReconnect(body.requestId,body.targetId);if(result.status!=="accepted")return Response.json(result,{status:409});try{await new WalletService({url:this.env.SUPABASE_URL,serviceKey:this.env.SUPABASE_SERVICE_ROLE_KEY,fetcher:this.env.FETCHER||fetch}).apply({userId:result.request.initiatorUserId,delta:-50,type:"favourite_reconnect",reason:"Accepted favourite reconnect",idempotencyKey:`reconnect:${body.requestId}:${result.request.initiatorUserId}`,metadata:{sessionId:result.sessionId}});}catch(error){service.end(result.request.initiatorId,result.sessionId);await this.state.storage.put(STATE_KEY,service.snapshot());return Response.json({error:error.message},{status:error.message.includes("insufficient")?402:502});}await this.state.storage.put(STATE_KEY,service.snapshot());await Promise.all([this.setPresence(result.request.initiatorId,"chatting"),this.setPresence(result.request.targetId,"chatting")]);return Response.json({status:"accepted",sessionId:result.sessionId});
     }
     if(request.method==="POST"&&url.pathname==="/authorize-session"){
-      const body=await request.json(),claim=service.active[body.identityId],allowed=Boolean(claim&&claim.sessionId===body.sessionId);return Response.json({allowed,...(allowed?{accountUserId:claim.accountUserId||null,virtual:Boolean(claim.virtual)}:{})},{status:allowed?200:403});
+      const body=await request.json(),claim=service.active[body.identityId],allowed=Boolean(claim&&claim.sessionId===body.sessionId);return Response.json({allowed,...(allowed?{accountUserId:claim.accountUserId||null,virtual:Boolean(claim.virtual),virtualPeer:claim.virtualPeer||null}:{})},{status:allowed?200:403});
     }
     return Response.json({error:"not_found"},{status:404});
   }

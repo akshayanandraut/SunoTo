@@ -58,3 +58,7 @@ Requests are temporary and online-only. Decline, expiry or either identity going
 - `PUT /api/v1/admin/ads` accepts `{ "expectedVersion": 1, "config": { ... } }`; stale versions are rejected and successful changes are audited atomically.
 
 Admin access requires a verified Supabase session whose user ID exactly matches the Worker's secret `ADMIN_USER_ID`. Frontend visibility is never treated as authorization.
+
+## Virtual fallback
+
+When enabled in server configuration, `GET /api/v1/match/result` may return `virtual: true`, `matchMode: "virtual_fallback"`, a public virtual profile and `preferenceFee: 0`. Random searches remain human-only for at least 15 seconds; paid preference/radius searches remain human-only for their full 30/45-second timeout. Virtual provider configuration and persona prompts are not exposed by the public API.

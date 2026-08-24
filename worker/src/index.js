@@ -22,7 +22,7 @@ export async function adminUser(request,env,verify=verifySupabaseUser){const use
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/api/v1/health") return Response.json({ ok: true, service: "random-chat-worker", phase: 19 });
+    if (url.pathname === "/api/v1/health") return Response.json({ ok: true, service: "random-chat-worker", phase: 20 });
     if(request.method==="GET"&&url.pathname==="/api/v1/config/public"){try{const ads=await new ConfigService(env).ads();return Response.json({ads:ads.config,version:ads.version});}catch{return Response.json({ads:DEFAULT_AD_CONFIG,version:0});}}
     if(url.pathname==="/api/v1/admin/ads"&&(request.method==="GET"||request.method==="PUT")){
       const authorization=await adminUser(request,env);if(authorization.error)return authorization.error;const config=new ConfigService(env);try{if(request.method==="GET")return Response.json(await config.ads());const body=await request.json();if(!Number.isSafeInteger(body.expectedVersion))return Response.json({error:"invalid_config_version"},{status:400});return Response.json(await config.updateAds({adminId:authorization.user.id,expectedVersion:body.expectedVersion,config:body.config}));}catch(error){return Response.json({error:error.message},{status:error.message.includes("version_conflict")?409:400});}
@@ -74,7 +74,7 @@ export default {
       const claims=await anonymousClaims(request,env,webSocketToken(request));if(!claims)return Response.json({error:"invalid_anonymous_session"},{status:401});
       const authorized=await shard(env,"MATCHMAKING").fetch("https://match.internal/authorize-session",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({identityId:claims.sub,sessionId:match[1]})});if(!authorized.ok)return Response.json({error:"session_not_authorized"},{status:403});const authorization=await authorized.json();
       const id = env.CHAT_SESSION.idFromName(match[1]);
-      const internal=new URL(`https://chat.internal${url.pathname}`),headers=new Headers(request.headers);internal.searchParams.set("identityId",claims.sub);if(authorization.accountUserId)internal.searchParams.set("accountUserId",authorization.accountUserId);if(authorization.virtual)internal.searchParams.set("virtual","1");if(url.searchParams.get("resumeToken"))internal.searchParams.set("resumeToken",url.searchParams.get("resumeToken"));headers.delete("authorization");headers.set("sec-websocket-protocol","random-chat.v1");return env.CHAT_SESSION.get(id).fetch(new Request(internal,{method:"GET",headers}));
+      const internal=new URL(`https://chat.internal${url.pathname}`),headers=new Headers(request.headers);internal.searchParams.set("identityId",claims.sub);if(authorization.accountUserId)internal.searchParams.set("accountUserId",authorization.accountUserId);if(authorization.virtual)internal.searchParams.set("virtual","1");if(authorization.virtualPeer)internal.searchParams.set("virtualPeer",JSON.stringify(authorization.virtualPeer));if(url.searchParams.get("resumeToken"))internal.searchParams.set("resumeToken",url.searchParams.get("resumeToken"));headers.delete("authorization");headers.set("sec-websocket-protocol","random-chat.v1");return env.CHAT_SESSION.get(id).fetch(new Request(internal,{method:"GET",headers}));
     }
     return Response.json({ error: "not_found" }, { status: 404 });
   }

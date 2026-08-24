@@ -19,3 +19,5 @@ Contact information and off-platform links are rejected with `MESSAGE_REJECTED {
 Contact sharing uses `CONTACT_UNLOCK_REQUEST`, `CONTACT_UNLOCK_ACCEPT`, and `CONTACT_UNLOCK_DECLINE`. Successful mutual payment emits `CONTACT_UNLOCKED { seconds: 300 }`; expiry or failure emits `CONTACT_UNLOCK_ENDED`. The 500-Credit debit for each participant is atomic across both wallets.
 
 `LIKE` is accepted once per participant and the peer receives `LIKE_RECEIVED`. `REPORT` requires a fixed reason and replies with `REPORT_ACCEPTED` before ending privately. `BLOCK` requires a registered account, persists account-wide and ends the room without exposing the action to the peer.
+
+For virtual fallback, `READY` includes `peer.virtual: true` and a limited public profile; `CHAT_STARTED` also includes `virtual: true`. The virtual participant either waits or sends one configured short greeting, then sends nothing further until the human replies. Provider replies include `payload.virtual: true`, are not persisted as transcript state, and never trigger wallet debits. The room ends after its free two minutes without offering paid continuation or contact unlock.

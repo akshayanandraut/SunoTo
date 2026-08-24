@@ -43,6 +43,8 @@ Phase 18 adds online-only reconnect requests for browser-local favourites. The t
 
 Phase 19 adds a disabled-by-default, swappable ad provider boundary and the three locked tiers: free/zero-Credit users may see banners, desktop side placements and every-fifth-scan interstitials; registered users with 1–1,000 Credits never see interstitials; registered users above 1,000 Credits see no ads. A separately authorized super-admin can version and audit provider, placement and kill-switch changes.
 
+Phase 20 adds disabled-by-default virtual fallback for cold starts. Humans always have priority; random searches wait at least 15 seconds and paid-preference searches wait their full timeout. Virtual matches are visibly marked, cost no preference or message Credits, end after the free two minutes, and use a replaceable mock/Workers AI provider. At match start they either wait or send one configurable short greeting, then remain silent until the human replies.
+
 The frontend is a local interactive prototype with anonymous browser identity, remembered onboarding preferences, IndexedDB history/favourites and same-browser tab ownership. Production deployment is intentionally not implemented yet.
 
 ## Checks
