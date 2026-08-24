@@ -1,0 +1,5 @@
+import { it } from "node:test";
+import assert from "node:assert/strict";
+import { runStagingSmoke } from "../scripts/staging-smoke.mjs";
+
+it("checks staging health, public config, compliance, preflight and hostile origins",async()=>{const calls=[],fetcher=async(url,options={})=>{calls.push({url,options});const origin=options.headers?.origin;if(origin==="https://not-allowed.invalid")return Response.json({error:"origin_not_allowed"},{status:403});const path=new URL(url).pathname,data=path.endsWith("/health")?{phase:23}:path.endsWith("/compliance/public")?{grievanceOfficer:{configured:true}}:{};return Response.json(data,{status:options.method==="OPTIONS"?200:200,headers:{"access-control-allow-origin":"https://staging.random.in","access-control-allow-methods":"GET, POST, OPTIONS"}});},results=await runStagingSmoke({apiUrl:"https://api-staging.random.in/api/v1",webOrigin:"https://staging.random.in",fetcher});assert.equal(results.length,6);assert.equal(calls.at(-1).options.headers.origin,"https://not-allowed.invalid");});
