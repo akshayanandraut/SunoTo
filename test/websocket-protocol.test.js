@@ -1,7 +1,7 @@
 import { describe,it } from "node:test";
 import assert from "node:assert/strict";
 import { parseClientEvent,serverEvent } from "../worker/src/protocol.js";
-import { ChatSession } from "../worker/src/durable/ChatSession.js";
+import { ChatSession,migrateParticipantIdentity } from "../worker/src/durable/ChatSession.js";
 
 function fakeSocket(participantId){return{sent:[],send(value){this.sent.push(JSON.parse(value))},deserializeAttachment(){return{participantId,resumeToken:`token-${participantId}`}}};}
 function memoryState(sockets,session={participants:{a:{lastActivityAt:0},b:{lastActivityAt:0}},disconnects:{},startedAt:0}){const values=new Map([["session",session]]);return{getWebSockets:()=>sockets,storage:{get:key=>values.get(key),put:(key,value)=>values.set(key,structuredClone(value)),setAlarm:()=>{}},values};}
@@ -15,6 +15,8 @@ describe("WebSocket protocol",()=>{
 });
 
 describe("ChatSession relay",()=>{
+  it("moves ephemeral room state to the newest account identity without resetting trial or consent",()=>{const session={participants:{old:{accountUserId:"user-a"},peer:{}},disconnects:{old:10},trialConsumed:{old:true},continueAccepted:{old:true},contactState:{old:{digits:"12"}}};migrateParticipantIdentity(session,"old","new");assert.equal(session.participants.old,undefined);assert.equal(session.participants.new.accountUserId,"user-a");assert.equal(session.trialConsumed.new,true);assert.equal(session.continueAccepted.new,true);assert.deepEqual(session.contactState.new,{digits:"12"});});
+  it("ignores delayed close events from an account identity that was replaced",async()=>{const old=fakeSocket("old"),peer=fakeSocket("peer"),state=memoryState([old,peer],{sessionId:"takeover",participants:{new:{accountUserId:"user-a"},peer:{}},disconnects:{},startedAt:Date.now(),ended:false}),room=new ChatSession(state,{});await room.webSocketClose(old,4001,"account_takeover");assert.deepEqual(state.values.get("session").disconnects,{});assert.equal(peer.sent.length,0);});
   it("acknowledges and relays without persisting message text",async()=>{const sender=fakeSocket("a"),peer=fakeSocket("b"),state=memoryState([sender,peer]);const session=new ChatSession(state);await session.webSocketMessage(sender,JSON.stringify({v:1,type:"CHAT_MESSAGE",eventId:"event-1",payload:{text:"hello"}}));assert.equal(sender.sent[0].type,"MESSAGE_ACCEPTED");assert.equal(peer.sent[0].type,"MESSAGE_RECEIVED");assert.equal(peer.sent[0].payload.text,"hello");assert.equal(JSON.stringify(state.values.get("session")).includes("hello"),false);});
   it("rejects invalid input without relaying",async()=>{const sender=fakeSocket("a"),peer=fakeSocket("b");const session=new ChatSession(memoryState([sender,peer]));await session.webSocketMessage(sender,"bad");assert.equal(sender.sent[0].type,"MESSAGE_REJECTED");assert.equal(peer.sent.length,0);});
   it("announces disconnect and reconnect grace",async()=>{const sender=fakeSocket("a"),peer=fakeSocket("b");const session=new ChatSession(memoryState([sender,peer]));await session.webSocketClose(sender,1006,"gone");assert.deepEqual(peer.sent.map(event=>event.type),["PEER_DISCONNECTED","RECONNECT_GRACE"]);});
