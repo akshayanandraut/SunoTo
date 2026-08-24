@@ -18,6 +18,7 @@ describe("production rate limits",()=>{
 describe("HTTP security boundary",()=>{
   it("allows configured and same-site origins while rejecting unknown origins",()=>{assert.equal(allowedOrigin(new Request("https://api.example.test/x",{headers:{origin:"https://web.example.test"}}),{ALLOWED_ORIGIN:"https://web.example.test"}),"https://web.example.test");assert.equal(allowedOrigin(new Request("https://api.example.test/x",{headers:{origin:"https://api.example.test"}}),{}),"https://api.example.test");assert.equal(allowedOrigin(new Request("https://api.example.test/x",{headers:{origin:"https://evil.example"}}),{}),false);});
   it("adds browser defenses and disables caching for private APIs",()=>{const request=new Request("https://api.example.test/api/v1/me/profile",{headers:{origin:"https://web.example.test"}}),response=secureResponse(Response.json({ok:true}),request,{ALLOWED_ORIGIN:"https://web.example.test"});assert.equal(response.headers.get("access-control-allow-origin"),"https://web.example.test");assert.equal(response.headers.get("x-content-type-options"),"nosniff");assert.equal(response.headers.get("x-frame-options"),"DENY");assert.equal(response.headers.get("cache-control"),"no-store");});
+  it("keeps first-party geolocation available for explicit radius matching",async()=>{const headers=await readFile(new URL("../web/public/_headers",import.meta.url),"utf8");assert.match(headers,/Permissions-Policy: camera=\(\), microphone=\(\), geolocation=\(self\)/);assert.doesNotMatch(headers,/geolocation=\(\)/);});
 });
 
 describe("privacy operations",()=>{
