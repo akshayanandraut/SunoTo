@@ -1,0 +1,3 @@
+const base=import.meta.env.VITE_API_BASE_URL||"http://127.0.0.1:8787/api/v1";
+export async function recordClientEvent(eventName,fetcher=fetch){const day=new Date().toISOString().slice(0,10),key=`random-chat.analytics.${eventName}.${day}`;let eventId=localStorage.getItem(key);if(eventId)return{recorded:false};eventId=crypto.randomUUID();const response=await fetcher(`${base}/analytics/event`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({eventId,eventName})});if(response.ok)localStorage.setItem(key,eventId);return response.json();}
+export async function publicStats(fetcher=fetch){const response=await fetcher(`${base}/stats/public`),data=await response.json();if(!response.ok)throw new Error(data.error||"public_stats_failed");return data;}

@@ -47,6 +47,8 @@ Phase 20 adds disabled-by-default virtual fallback for cold starts. Humans alway
 
 Phase 21 replaces the admin shell with a server-authorized operations portal for exact live room counts, accounts, wallets/ledgers, reports, restrictions, offers/coupons, ads, virtual configuration and audit history. The configured super-admin must use a verified Supabase session at AAL2/MFA. Wallet, moderation, promotion and configuration writes are versioned or idempotent, transactionally audited, and active restrictions immediately end affected rooms.
 
+Phase 22 adds idempotent, content-free event aggregation by IST day. Server-owned match, virtual, delivered-message, trial, payment, contact, reconnect and safety outcomes feed exact admin aggregates without storing user IDs or message payloads. Public stats expose rounded-down real, virtual and message activity labels only; zero and small samples are stated plainly rather than inflated.
+
 The frontend is a local interactive prototype with anonymous browser identity, remembered onboarding preferences, IndexedDB history/favourites and same-browser tab ownership. Production deployment is intentionally not implemented yet.
 
 ## Checks

@@ -1,0 +1,15 @@
+import { describe,it } from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { AnalyticsService,approximatePublicCount } from "../worker/src/services/AnalyticsService.js";
+import { ChatSession } from "../worker/src/durable/ChatSession.js";
+
+function socket(id){return{sent:[],send(raw){this.sent.push(JSON.parse(raw))},deserializeAttachment(){return{participantId:id,resumeToken:`token-${id}`}}};}
+function state(sockets){const values=new Map([["session",{sessionId:"session-analytics",participants:{a:{lastActivityAt:0},b:{lastActivityAt:0}},disconnects:{},startedAt:Date.now()}]]);return{getWebSockets:()=>sockets,storage:{get:key=>values.get(key),put:(key,value)=>values.set(key,structuredClone(value)),setAlarm:()=>{}},values};}
+
+describe("privacy-minimal analytics",()=>{
+  it("records only an idempotency key, allowed dimensions, and numeric value",async()=>{let body,headers;const service=new AnalyticsService({SUPABASE_URL:"https://project",SUPABASE_SERVICE_ROLE_KEY:"service"},async(_url,options)=>{body=JSON.parse(options.body);headers=options.headers;return Response.json(true);}),result=await service.record({eventId:"match:session-1",eventName:"match_found",dimension:"real"});assert.equal(result.recorded,true);assert.equal(body.target_event_name,"match_found");assert.equal(body.target_dimension,"real");assert.equal(Object.hasOwn(body,"metadata"),false);assert.equal(headers.authorization,"Bearer service");});
+  it("does not include relayed chat text in the analytics operation",async()=>{const a=socket("a"),b=socket("b"),roomState=state([a,b]);let analyticsBody;const room=new ChatSession(roomState,{SUPABASE_URL:"https://project",SUPABASE_SERVICE_ROLE_KEY:"service",ANALYTICS_FETCHER:async(_url,options)=>{analyticsBody=JSON.parse(options.body);return Response.json(true);}});await room.webSocketMessage(a,JSON.stringify({v:1,type:"CHAT_MESSAGE",eventId:"message-1",payload:{text:"private conversation text"}}));assert.equal(analyticsBody.target_event_name,"message_sent");assert.equal(JSON.stringify(analyticsBody).includes("private conversation text"),false);assert.equal(JSON.stringify(roomState.values.get("session")).includes("private conversation text"),false);});
+  it("rounds public counts down and labels very small samples",()=>{assert.equal(approximatePublicCount(0),"No activity yet");assert.equal(approximatePublicCount(7),"Fewer than 10");assert.equal(approximatePublicCount(39),"~30");assert.equal(approximatePublicCount(349),"~300");assert.equal(approximatePublicCount(1288),"~1,200");});
+  it("aggregates daily with dedupe and stores no message table or payload",async()=>{const sql=await readFile(new URL("../supabase/migrations/202608250009_phase22_analytics.sql",import.meta.url),"utf8");assert.match(sql,/on conflict do nothing/i);assert.match(sql,/analytics_daily\.event_count\+1/i);assert.match(sql,/Asia\/Kolkata/i);assert.doesNotMatch(sql,/message_text|payload jsonb|create table[^;]*messages/i);});
+});

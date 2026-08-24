@@ -72,3 +72,10 @@ Admin wallet operations are idempotent and never update balances directly. Restr
 ## Virtual fallback
 
 When enabled in server configuration, `GET /api/v1/match/result` may return `virtual: true`, `matchMode: "virtual_fallback"`, a public virtual profile and `preferenceFee: 0`. Random searches remain human-only for at least 15 seconds; paid preference/radius searches remain human-only for their full 30/45-second timeout. Virtual provider configuration and persona prompts are not exposed by the public API.
+
+## Analytics and truthful public counts
+
+- `POST /api/v1/analytics/event` accepts only a small client allowlist (`landing_view`, `onboarding_completed`, `signup_started`, `return_visit`) with an opaque event ID. It accepts no metadata or chat content.
+- `GET /api/v1/stats/public` returns rounded-down labels for real connections, virtual connections and delivered messages today, with an `approximate: true` marker and source timestamp.
+
+Money, match, session, reconnect, safety and virtual events are recorded only by trusted Worker flows. Admin dashboard analytics remain exact and keep real/virtual dimensions separate.

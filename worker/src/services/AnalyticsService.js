@@ -1,0 +1,9 @@
+export const CLIENT_ANALYTICS_EVENTS=new Set(["landing_view","onboarding_completed","signup_started","return_visit"]);
+export class AnalyticsService{
+  constructor(env,fetcher=fetch){this.env=env;this.fetcher=fetcher}
+  headers(){return{apikey:this.env.SUPABASE_SERVICE_ROLE_KEY,authorization:`Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`,"content-type":"application/json"}}
+  async record({eventId,eventName,dimension="total",value=0,time}){const response=await this.fetcher(`${this.env.SUPABASE_URL}/rest/v1/rpc/record_analytics_event`,{method:"POST",headers:this.headers(),body:JSON.stringify({target_event_id:eventId,target_event_name:eventName,target_dimension:dimension,target_value:value,...(time?{target_time:time}:{})})}),data=await response.json().catch(()=>null);if(!response.ok)throw new Error(data?.message||"analytics_event_failed");return{recorded:data===true}}
+  async publicSnapshot(){const response=await this.fetcher(`${this.env.SUPABASE_URL}/rest/v1/rpc/public_analytics_snapshot`,{method:"POST",headers:this.headers(),body:"{}"}),data=await response.json().catch(()=>({}));if(!response.ok)throw new Error("public_analytics_failed");return Array.isArray(data)?data[0]:data}
+  async adminSnapshot(days=30){const response=await this.fetcher(`${this.env.SUPABASE_URL}/rest/v1/rpc/admin_analytics_snapshot`,{method:"POST",headers:this.headers(),body:JSON.stringify({result_days:days})}),data=await response.json().catch(()=>[]);if(!response.ok)throw new Error("admin_analytics_failed");return data}
+}
+export function approximatePublicCount(value){const count=Math.max(0,Number(value)||0);if(count===0)return"No activity yet";if(count<10)return"Fewer than 10";const unit=count<100?10:count<1000?50:100;return`~${(Math.floor(count/unit)*unit).toLocaleString("en-IN")}`;}
