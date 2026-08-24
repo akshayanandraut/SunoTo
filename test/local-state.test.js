@@ -10,7 +10,8 @@ function memoryStorage() {
 }
 
 describe("anonymous local identity",()=>{
-  it("creates a friendly stable handle",()=>{const storage=memoryStorage();const cryptoApi={randomUUID:(()=>{let id=0;return()=>`uuid-${++id}`})()};const first=getAnonymousIdentity(storage,cryptoApi);const second=getAnonymousIdentity(storage,cryptoApi);assert.equal(first.id,second.id);assert.equal(first.handle,second.handle);assert.match(first.handle,/^[A-Za-z]+\d{3}$/);});
+  it("creates a friendly stable handle",()=>{const storage=memoryStorage();const cryptoApi={randomUUID:(()=>{let id=0;return()=>`identity-${++id}`})()};const first=getAnonymousIdentity(storage,cryptoApi);const second=getAnonymousIdentity(storage,cryptoApi);assert.equal(first.id,second.id);assert.equal(first.handle,second.handle);assert.match(first.handle,/^[A-Za-z]+\d{3}$/);});
+  it("replaces a tampered restored identity",()=>{const storage=memoryStorage(),cryptoApi={randomUUID:(()=>{let id=0;return()=>`replacement-${++id}`})()};storage.setItem("random-chat.anonymous-identity.v1",JSON.stringify({id:"identity-valid",secret:"secret-valid",handle:'<img src=x onerror="bad()">'}));const identity=getAnonymousIdentity(storage,cryptoApi);assert.equal(identity.id,"replacement-1");assert.match(identity.handle,/^[A-Za-z]+\d{3}$/);});
   it("generates predictable valid handles with injected randomness",()=>assert.equal(createFriendlyHandle(()=>0),"QuietRiver100"));
 });
 
