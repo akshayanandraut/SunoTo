@@ -3,9 +3,13 @@ create table if not exists public.account_deletion_requests (
   user_id uuid not null references auth.users(id) on delete restrict,
   reason text,
   status text not null default 'pending' check(status in ('pending','processing','completed','rejected')),
+  processing_note text,
+  processed_by uuid references auth.users(id) on delete set null,
   requested_at timestamptz not null default now(),
   completed_at timestamptz
 );
+alter table public.account_deletion_requests add column if not exists processing_note text;
+alter table public.account_deletion_requests add column if not exists processed_by uuid references auth.users(id) on delete set null;
 create unique index if not exists one_open_deletion_request_per_user on public.account_deletion_requests(user_id) where status in ('pending','processing');
 create table if not exists public.grievances (
   id uuid primary key default gen_random_uuid(),
@@ -47,6 +51,17 @@ begin
   select to_jsonb(g) into after_row from public.grievances g where id=target_id;insert into public.admin_audit(admin_user_id,action,target_type,target_ref,before_value,after_value) values(admin_id,'grievance.'||new_status,'grievance',target_id::text,before_row,after_row);return after_row;
 end;$$;
 
-revoke all on function public.request_account_deletion(uuid,text),function public.cleanup_operational_retention(),function public.admin_update_grievance(uuid,uuid,text) from public,anon,authenticated;
-grant execute on function public.request_account_deletion(uuid,text),function public.cleanup_operational_retention(),function public.admin_update_grievance(uuid,uuid,text) to service_role;
+create or replace function public.admin_update_deletion_request(admin_id uuid,target_id uuid,new_status text,decision_note text)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare before_row jsonb;after_row jsonb;current_status text;
+begin
+  if new_status not in ('processing','completed','rejected') or length(trim(coalesce(decision_note,'')))<10 then raise exception 'invalid_deletion_transition';end if;
+  select status,to_jsonb(r) into current_status,before_row from public.account_deletion_requests r where id=target_id for update;if before_row is null then raise exception 'deletion_request_not_found';end if;
+  if not ((current_status='pending' and new_status in ('processing','rejected')) or (current_status='processing' and new_status in ('completed','rejected'))) then raise exception 'invalid_deletion_transition';end if;
+  update public.account_deletion_requests set status=new_status,processing_note=left(trim(decision_note),1000),processed_by=admin_id,completed_at=case when new_status in ('completed','rejected') then now() else null end where id=target_id;
+  select to_jsonb(r) into after_row from public.account_deletion_requests r where id=target_id;insert into public.admin_audit(admin_user_id,action,target_type,target_ref,before_value,after_value) values(admin_id,'deletion.'||new_status,'account_deletion_request',target_id::text,before_row,after_row);return after_row;
+end;$$;
+
+revoke all on function public.request_account_deletion(uuid,text),function public.cleanup_operational_retention(),function public.admin_update_grievance(uuid,uuid,text),function public.admin_update_deletion_request(uuid,uuid,text,text) from public,anon,authenticated;
+grant execute on function public.request_account_deletion(uuid,text),function public.cleanup_operational_retention(),function public.admin_update_grievance(uuid,uuid,text),function public.admin_update_deletion_request(uuid,uuid,text,text) to service_role;
 grant insert on public.grievances to service_role;
