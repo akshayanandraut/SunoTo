@@ -6,7 +6,7 @@ Phase 3 exposes `GET /api/v1/chat/:sessionId/socket`. The request must be a WebS
 {"v":1,"type":"CHAT_MESSAGE","eventId":"client-unique-id","payload":{"text":"Hello"}}
 ```
 
-Client events: `HELLO`, `HEARTBEAT`, `ACTIVITY`, `CHAT_MESSAGE`, `NEXT_REQUEST`, `SESSION_RESUME`, `CONTINUE_ACCEPT`, and `CONTINUE_DECLINE`. Chat messages require an event ID and 1–1000 text characters. Early `NEXT_REQUEST` exceptions are derived from server-observed peer state, never trusted from client claims.
+Client events include `HELLO`, `HEARTBEAT`, `ACTIVITY`, `CHAT_MESSAGE`, `NEXT_REQUEST`, `SESSION_END`, `SESSION_RESUME`, `CONTINUE_ACCEPT`, and `CONTINUE_DECLINE`. Chat messages require an event ID and 1–1000 text characters. Either participant can end immediately with `SESSION_END`; early `NEXT_REQUEST` exceptions remain derived from server-observed peer state, never trusted from client claims.
 
 Server events additionally include `CONTINUE_REQUESTED`, `CONTINUE_ACTIVATED`, `CONTINUE_NOT_ACCEPTED`, and `PAYMENT_HOLD`. Paid continuation requires both verified participants, charges 10 Credits to the sender of each accepted message, and idempotently maps the debit to the message event ID.
 
