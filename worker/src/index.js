@@ -35,7 +35,7 @@ export function secureResponse(response,request,env){if(response.status===101)re
 
 async function handleRequest(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/api/v1/health") return Response.json({ ok: true, service: "random-chat-worker", phase: 22 });
+    if (url.pathname === "/api/v1/health") return Response.json({ ok: true, service: "random-chat-worker", phase: 23 });
     if(request.method==="GET"&&url.pathname==="/api/v1/config/public"){try{const ads=await new ConfigService(env).ads();return Response.json({ads:ads.config,version:ads.version});}catch{return Response.json({ads:DEFAULT_AD_CONFIG,version:0});}}
     if(request.method==="POST"&&url.pathname==="/api/v1/analytics/event"){const limited=await enforceRateLimit(request,env,"analytics");if(limited)return limited;const body=await request.json().catch(()=>({}));if(!CLIENT_ANALYTICS_EVENTS.has(body.eventName)||!/^[a-zA-Z0-9_-]{8,160}$/.test(body.eventId||""))return Response.json({error:"invalid_analytics_event"},{status:400});const result=await recordAnalytics(env,{eventId:`client:${body.eventId}`,eventName:body.eventName,dimension:"anonymous"});return result?Response.json(result):Response.json({recorded:false},{status:503});}
     if(request.method==="GET"&&url.pathname==="/api/v1/stats/public"){try{const snapshot=await new AnalyticsService(env,env.ANALYTICS_FETCHER||fetch).publicSnapshot();return Response.json({realConnectionsToday:approximatePublicCount(snapshot.realConnectionsToday),virtualConnectionsToday:approximatePublicCount(snapshot.virtualConnectionsToday),messagesToday:approximatePublicCount(snapshot.messagesToday),asOf:snapshot.asOf,approximate:true});}catch{return Response.json({error:"stats_temporarily_unavailable"},{status:503});}}

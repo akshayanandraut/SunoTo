@@ -1882,7 +1882,7 @@ Goal: normal free message relay should not hit Postgres per message.
 - [x] Phase 20
 - [x] Phase 21
 - [x] Phase 22
-- [ ] Phase 23
+- [x] Phase 23
 - [ ] Phase 24
 
 Codex updates only after acceptance tests pass.

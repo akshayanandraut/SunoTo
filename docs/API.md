@@ -79,3 +79,14 @@ When enabled in server configuration, `GET /api/v1/match/result` may return `vir
 - `GET /api/v1/stats/public` returns rounded-down labels for real connections, virtual connections and delivered messages today, with an `approximate: true` marker and source timestamp.
 
 Money, match, session, reconnect, safety and virtual events are recorded only by trusted Worker flows. Admin dashboard analytics remain exact and keep real/virtual dimensions separate.
+
+## Privacy and compliance
+
+- `GET /api/v1/me/export` returns the authenticated account's server-held profile, wallet, ledger, payment, block and deletion-request data. It explicitly excludes browser-only chat history.
+- `DELETE /api/v1/me/account` requires `{ "confirm": "DELETE", "reason": "optional" }`, ends active claims and creates or returns an idempotent pending deletion request. Pending/processing accounts cannot start a new search.
+- `GET /api/v1/compliance/public` exposes the configured grievance officer and operational response targets without secrets.
+- `POST /api/v1/grievances` accepts a validated email, category and 20–2,000 character description. It returns a reference ID and is rate-limited.
+- Admin-only `GET /api/v1/admin/grievances` and `POST /api/v1/admin/grievances/:id` operate the audited grievance queue.
+- Admin-only `GET /api/v1/admin/deletions` and `POST /api/v1/admin/deletions/:id` operate a locked, audited deletion queue. A transition requires a substantive processing note; completion must only be recorded after the runbook process is actually performed.
+
+API responses use exact-origin CORS and private routes default to `Cache-Control: no-store`. Unknown browser origins are rejected. WebSocket upgrades preserve their native response rather than being reconstructed by the HTTP header wrapper.

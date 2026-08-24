@@ -49,8 +49,10 @@ Phase 21 replaces the admin shell with a server-authorized operations portal for
 
 Phase 22 adds idempotent, content-free event aggregation by IST day. Server-owned match, virtual, delivered-message, trial, payment, contact, reconnect and safety outcomes feed exact admin aggregates without storing user IDs or message payloads. Public stats expose rounded-down real, virtual and message activity labels only; zero and small samples are stated plainly rather than inflated.
 
+Phase 23 adds fail-closed production hardening: scoped Durable Object and room message rate limits, exact-origin CORS, CSP/HSTS and browser defenses, sanitized server errors, account data export/deletion requests, public grievance intake, and audited admin queues for grievance/deletion processing. Policy pages remain explicitly subject to counsel approval. `docs/PRODUCTION_RUNBOOK.md` defines custom SMTP, retention, recovery and incident gates; `pnpm production:validate` rejects placeholders, insecure origins, disabled admin MFA, and missing SMTP/legal evidence.
+
 The frontend is a local interactive prototype with anonymous browser identity, remembered onboarding preferences, IndexedDB history/favourites and same-browser tab ownership. Production deployment is intentionally not implemented yet.
 
 ## Checks
 
-Run `pnpm check` to execute unit tests and produce a production frontend build.
+Use Node.js 22.12 or newer. Run `pnpm check` and `pnpm worker:build` for the full local gate. Run `pnpm production:validate` only with the intended production environment; it intentionally fails until all secrets, officer details, SMTP evidence and legal approval references are supplied.

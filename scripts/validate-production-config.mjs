@@ -1,0 +1,10 @@
+import { pathToFileURL } from "node:url";
+
+const placeholder=value=>!value||/replace|example/i.test(value);
+const uuid=value=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value||"");
+const email=value=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value||"");
+const httpsUrl=value=>{try{return new URL(value).protocol==="https:"}catch{return false}};
+
+export function validateProductionConfig(env){const errors=[],required=["SUPABASE_URL","SUPABASE_PUBLISHABLE_KEY","SUPABASE_SERVICE_ROLE_KEY","RAZORPAY_KEY_ID","RAZORPAY_KEY_SECRET","RAZORPAY_WEBHOOK_SECRET","ANON_SESSION_SECRET","ADMIN_USER_ID","ALLOWED_ORIGIN","GRIEVANCE_OFFICER_NAME","GRIEVANCE_EMAIL","SMTP_VERIFIED_AT","LEGAL_APPROVAL_REFERENCE"];for(const name of required)if(placeholder(env[name]))errors.push(`${name} is missing or still a placeholder`);if(!httpsUrl(env.SUPABASE_URL))errors.push("SUPABASE_URL must use HTTPS");if(!httpsUrl(env.ALLOWED_ORIGIN))errors.push("ALLOWED_ORIGIN must be one exact HTTPS origin");if(String(env.ALLOWED_ORIGIN||"").includes(","))errors.push("Use ALLOWED_ORIGINS for multiple exact origins");if(String(env.ANON_SESSION_SECRET||"").length<32)errors.push("ANON_SESSION_SECRET must contain at least 32 characters");if(!uuid(env.ADMIN_USER_ID))errors.push("ADMIN_USER_ID must be a UUID");if(!email(env.GRIEVANCE_EMAIL))errors.push("GRIEVANCE_EMAIL must be a valid monitored address");if(env.ADMIN_REQUIRE_AAL2!=="true")errors.push("ADMIN_REQUIRE_AAL2 must be true in production");if(Number.isNaN(Date.parse(env.SMTP_VERIFIED_AT||"")))errors.push("SMTP_VERIFIED_AT must be an ISO date after delivery tests");return{ok:errors.length===0,errors};}
+
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){const result=validateProductionConfig(process.env);if(!result.ok){console.error("Production configuration is not ready:");for(const error of result.errors)console.error(`- ${error}`);process.exitCode=1;}else console.log("Production configuration gates passed. External staging evidence is still required by the launch checklist.");}
