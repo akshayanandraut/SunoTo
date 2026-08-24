@@ -25,3 +25,7 @@ describe("preference charge boundary",()=>{
 describe("phase 12 money safeguards",()=>{
   it("locks two wallets in stable order and commits both preference debits together",async()=>{const sql=await readFile(new URL("../supabase/migrations/202608250003_phase12_preferences.sql",import.meta.url),"utf8");assert.match(sql,/least\(left_user_id::text,right_user_id::text\)/i);assert.match(sql,/greatest\(left_user_id::text,right_user_id::text\)/i);assert.match(sql,/public\.apply_wallet_entry[\s\S]*public\.apply_wallet_entry/i);assert.match(sql,/preference:'\|\|target_session_id/i);assert.match(sql,/grant execute on function public\.charge_preference_match[\s\S]*service_role/i);assert.doesNotMatch(sql,/create table(?: if not exists)? public\.messages/i);});
 });
+
+describe("preference self-charge defense",()=>{
+  it("rejects a same-account pair before either transactional debit",async()=>{const sql=await readFile(new URL("../supabase/migrations/202608250013_preference_self_charge_guard.sql",import.meta.url),"utf8"),guard=sql.indexOf("same_account_preference_pair"),debit=sql.indexOf("public.apply_wallet_entry");assert.ok(guard>0);assert.ok(debit>guard);assert.match(sql,/left_user_id is not null and left_user_id=right_user_id/i);assert.match(sql,/grant execute on function public\.charge_preference_match[\s\S]*service_role/i);});
+});
