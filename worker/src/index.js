@@ -8,6 +8,8 @@ import { DeviceOwnershipShard } from "./durable/DeviceOwnershipShard.js";
 import { validUsername } from "./policies/usernamePolicy.js";
 import { PaymentService } from "./services/PaymentService.js";
 import { hasPaidPreferences,normalizePaidPreferences } from "./policies/preferencePolicy.js";
+import { ConfigService } from "./services/ConfigService.js";
+import { DEFAULT_AD_CONFIG } from "./policies/adPolicy.js";
 
 function shard(env,binding,name="global"){const namespace=env[binding];return namespace.get(namespace.idFromName(name));}
 function bearer(request){const value=request.headers.get("authorization")||"";return value.startsWith("Bearer ")?value.slice(7):null}
@@ -15,11 +17,16 @@ function webSocketToken(request){return(request.headers.get("sec-websocket-proto
 async function anonymousClaims(request,env,token=bearer(request)){return env.ANON_SESSION_SECRET?verifyAnonymousToken(token,env.ANON_SESSION_SECRET):null}
 async function anonymousStub(env){return shard(env,"ANONYMOUS")}
 async function proxyJson(request,env,path,{authorizeSearch=false,activity}={}){const claims=await anonymousClaims(request,env);if(!claims)return Response.json({error:"invalid_anonymous_session"},{status:401});const anon=await anonymousStub(env),body=await request.json();if(authorizeSearch){try{const preferences=normalizePaidPreferences(body.preferences||{});body.preferences=preferences;const accountToken=request.headers.get("x-account-authorization"),accountRequest=new Request(request.url,{headers:{authorization:accountToken||""}}),user=accountToken?await verifySupabaseUser(accountRequest,env):null;if(hasPaidPreferences(preferences)&&!user?.emailVerified)return Response.json({error:"verified_account_required_for_preferences"},{status:403});if(user){body.accountUserId=user.id;const blocks=await supabaseRest(env,user,"/blocks?select=blocked_ref");if(blocks.ok)body.blockedRefs=(await blocks.json()).map(item=>item.blocked_ref);}const allowed=await anon.fetch("https://anonymous.internal/authorize-search",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({identityId:claims.sub,registered:Boolean(user?.emailVerified)})});if(!allowed.ok)return allowed;}catch(error){return Response.json({error:error.message},{status:400});}}body.identityId=claims.sub;if(activity)await anon.fetch("https://anonymous.internal/activity",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({type:activity})});return shard(env,"MATCHMAKING").fetch(`https://match.internal${path}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});}
+export async function adminUser(request,env,verify=verifySupabaseUser){const user=await verify(request,env);if(!user)return{error:Response.json({error:"invalid_admin_session"},{status:401})};if(!user.emailVerified||!env.ADMIN_USER_ID||user.id!==env.ADMIN_USER_ID)return{error:Response.json({error:"admin_forbidden"},{status:403})};return{user};}
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/api/v1/health") return Response.json({ ok: true, service: "random-chat-worker", phase: 18 });
+    if (url.pathname === "/api/v1/health") return Response.json({ ok: true, service: "random-chat-worker", phase: 19 });
+    if(request.method==="GET"&&url.pathname==="/api/v1/config/public"){try{const ads=await new ConfigService(env).ads();return Response.json({ads:ads.config,version:ads.version});}catch{return Response.json({ads:DEFAULT_AD_CONFIG,version:0});}}
+    if(url.pathname==="/api/v1/admin/ads"&&(request.method==="GET"||request.method==="PUT")){
+      const authorization=await adminUser(request,env);if(authorization.error)return authorization.error;const config=new ConfigService(env);try{if(request.method==="GET")return Response.json(await config.ads());const body=await request.json();if(!Number.isSafeInteger(body.expectedVersion))return Response.json({error:"invalid_config_version"},{status:400});return Response.json(await config.updateAds({adminId:authorization.user.id,expectedVersion:body.expectedVersion,config:body.config}));}catch(error){return Response.json({error:error.message},{status:error.message.includes("version_conflict")?409:400});}
+    }
     if(request.method==="POST"&&url.pathname==="/api/v1/anonymous/session"){
       if(!env.ANON_SESSION_SECRET)return Response.json({error:"anonymous_sessions_not_configured"},{status:503});const body=await request.json(),prefix=ipPrefix(request.headers.get("CF-Connecting-IP")||"unknown"),ipHash=await keyedFingerprint(prefix,env.ANON_SESSION_SECRET);return (await anonymousStub(env)).fetch("https://anonymous.internal/issue",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...body,ipHash})});
     }

@@ -50,3 +50,11 @@ Wallet mutation is intentionally absent from the public API. Trusted Worker serv
 - `POST /api/v1/reconnect/respond` accepts `{ "requestId": "opaque-id", "accepted": true|false }`.
 
 Requests are temporary and online-only. Decline, expiry or either identity going offline costs zero. Acceptance atomically charges the initiator 50 Credits before returning a fresh session ID; a failed debit rolls back the match.
+
+## Configuration and ads
+
+- `GET /api/v1/config/public` returns non-secret ad provider, placement, tier threshold and kill-switch configuration. Failure returns the safe disabled default.
+- `GET /api/v1/admin/ads` returns versioned ad configuration to the configured super-admin.
+- `PUT /api/v1/admin/ads` accepts `{ "expectedVersion": 1, "config": { ... } }`; stale versions are rejected and successful changes are audited atomically.
+
+Admin access requires a verified Supabase session whose user ID exactly matches the Worker's secret `ADMIN_USER_ID`. Frontend visibility is never treated as authorization.

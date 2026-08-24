@@ -1878,7 +1878,7 @@ Goal: normal free message relay should not hit Postgres per message.
 - [x] Phase 16
 - [x] Phase 17
 - [x] Phase 18
-- [ ] Phase 19
+- [x] Phase 19
 - [ ] Phase 20
 - [ ] Phase 21
 - [ ] Phase 22

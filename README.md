@@ -41,6 +41,8 @@ Phase 17 adds one-per-chat likes, metadata-only reports, weighted risk with roug
 
 Phase 18 adds online-only reconnect requests for browser-local favourites. The target must accept while both identities remain online; only then is the verified initiator charged 50 Credits and given a fresh two-minute session. Offline, declined, expired and failed-payment requests create no queue and no charge.
 
+Phase 19 adds a disabled-by-default, swappable ad provider boundary and the three locked tiers: free/zero-Credit users may see banners, desktop side placements and every-fifth-scan interstitials; registered users with 1–1,000 Credits never see interstitials; registered users above 1,000 Credits see no ads. A separately authorized super-admin can version and audit provider, placement and kill-switch changes.
+
 The frontend is a local interactive prototype with anonymous browser identity, remembered onboarding preferences, IndexedDB history/favourites and same-browser tab ownership. Production deployment is intentionally not implemented yet.
 
 ## Checks
