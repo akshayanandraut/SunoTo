@@ -25,7 +25,7 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 ## Spike and soak
 
 - Run `k6 run -e STAGING_API_URL=https://.../api/v1 load/staging-spike.js` from approved infrastructure. The default public-edge spike requires p95 <500 ms, p99 <1 s and <1% failures.
-- Add a distributed realtime scenario using disposable identities. Respect the production abuse limits rather than adding a hidden bypass. Measure match latency, WebSocket upgrade success, relay latency, Durable Object errors, reconnects and cleanup after the test.
+- Run `STAGING_API_URL=https://.../api/v1 STAGING_WEB_ORIGIN=https://... REALTIME_PAIRS=10 REALTIME_CONCURRENCY=2 node load/staging-realtime.mjs` from approved distributed runners. It uses disposable signed identities and measures match, WebSocket upgrade, relay, reconnect and cleanup paths. Each runner is deliberately capped at 50 pairs and concurrency 10; respect production abuse limits instead of adding a hidden bypass.
 - Confirm queues/active claims return to zero and no chat payload persisted. Record the test ID, revision, region mix, peak VUs, results and cleanup evidence.
 
 ## Launch and rollback

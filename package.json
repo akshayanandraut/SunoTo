@@ -15,6 +15,7 @@
     "production:validate": "node scripts/validate-production-config.mjs",
     "production:build": "npm run production:validate && npm run build && node scripts/render-production-headers.mjs",
     "staging:smoke": "node scripts/staging-smoke.mjs",
+    "staging:realtime": "node load/staging-realtime.mjs",
     "launch:validate": "node scripts/validate-launch-evidence.mjs"
   },
   "devDependencies": {
