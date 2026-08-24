@@ -1,8 +1,8 @@
 # Architecture baseline
 
 - `web/`: static mobile-first HTML/CSS/ES-module frontend for Cloudflare Pages.
-- `worker/`: Cloudflare Worker API and future Durable Objects for realtime coordination.
-- `supabase/`: future PostgreSQL migrations, RLS policies and local seed data.
+- `worker/`: Cloudflare Worker API and Durable Objects for realtime coordination.
+- `supabase/`: PostgreSQL migrations, RLS policies and local seed data for persistent business state.
 - `test/`: cross-cutting tests.
 
 The browser is never authoritative for money, entitlements, reports, bans or payment success. Normal chat messages must not be permanently stored server-side.

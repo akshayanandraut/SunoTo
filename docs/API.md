@@ -6,11 +6,11 @@
 
 ## Matchmaking
 
-- `POST /api/v1/match/search` with `{ "identityId": "opaque-id", "blockedPeerIds": [] }`
+- `POST /api/v1/match/search` with optional `profile`, `preferences` and browser-local `blockedPeerIds` fields
 - `GET /api/v1/match/result`
-- `POST /api/v1/match/cancel` with `{ "identityId": "opaque-id" }`
-- `POST /api/v1/match/end` with `{ "identityId": "opaque-id", "sessionId": "opaque-session" }`
-- `POST /api/v1/presence/heartbeat` with `{ "identityId": "opaque-id", "status": "online|waiting|chatting" }`
+- `POST /api/v1/match/cancel`
+- `POST /api/v1/match/end` with `{ "sessionId": "opaque-session" }`
+- `POST /api/v1/presence/heartbeat` with `{ "status": "online|waiting|chatting" }`
 
 The first eligible person waits. The next eligible person receives a shared session ID; the waiting person obtains the same result by polling. Active claims prevent either identity from joining another random chat until the session ends.
 
@@ -46,6 +46,7 @@ Wallet mutation is intentionally absent from the public API. Trusted Worker serv
 ## Favourite reconnect
 
 - `POST /api/v1/reconnect/request` accepts `{ "targetPeerId": "opaque-id" }` with both the anonymous bearer token and a verified account token in `X-Account-Authorization`.
+- `POST /api/v1/reconnect/cancel` cancels the caller's pending outgoing request without a charge.
 - `GET /api/v1/reconnect/request` polls for an incoming request addressed to the anonymous identity.
 - `POST /api/v1/reconnect/respond` accepts `{ "requestId": "opaque-id", "accepted": true|false }`.
 

@@ -1,6 +1,6 @@
 # Random Chat India
 
-Mobile-first anonymous text chat for India. The project uses vanilla HTML, CSS and ES modules on the frontend, Cloudflare Workers/Durable Objects for realtime coordination, and Supabase for future account and business data.
+Mobile-first anonymous text chat for India. The project uses vanilla HTML, CSS and ES modules on the frontend, Cloudflare Workers/Durable Objects for realtime coordination, and Supabase Auth/Postgres for persistent account and business data.
 
 ## Local development
 
@@ -9,9 +9,9 @@ Mobile-first anonymous text chat for India. The project uses vanilla HTML, CSS a
 3. Run the frontend with `pnpm dev`.
 4. In a second terminal, run the Worker with `pnpm worker:dev`.
 
-The Phase 3 socket proof is available at `/api/v1/chat/:sessionId/socket` on the Worker. It accepts two WebSockets and supports temporary resume tokens. See `docs/WEBSOCKET_PROTOCOL.md` for the event contract.
+The realtime socket is available at `/api/v1/chat/:sessionId/socket` on the Worker. It accepts two WebSockets, authenticates them through subprotocol credentials and supports temporary resume tokens. See `docs/WEBSOCKET_PROTOCOL.md` for the event contract.
 
-Phase 4 adds random matchmaking and ephemeral presence endpoints. See `docs/API.md` for the development contract. Signed anonymous identity and abuse controls are deliberately deferred to Phase 6.
+Random matchmaking and ephemeral presence endpoints are documented in `docs/API.md`. Signed anonymous sessions and scoped abuse controls protect the public boundary.
 
 Phase 5 adds server-owned session timing, idle and reconnect alarms, skip locking, server-derived early-skip exceptions and configurable repeated-skip cooldowns.
 
@@ -51,7 +51,7 @@ Phase 22 adds idempotent, content-free event aggregation by IST day. Server-owne
 
 Phase 23 adds fail-closed production hardening: scoped Durable Object and room message rate limits, exact-origin CORS, CSP/HSTS and browser defenses, sanitized server errors, account data export/deletion requests, public grievance intake, and audited admin queues for grievance/deletion processing. Policy pages remain explicitly subject to counsel approval. `docs/PRODUCTION_RUNBOOK.md` defines custom SMTP, retention, recovery and incident gates; `pnpm production:validate` rejects placeholders, insecure origins, disabled admin MFA, and missing SMTP/legal evidence.
 
-The frontend is a local interactive prototype with anonymous browser identity, remembered onboarding preferences, IndexedDB history/favourites and same-browser tab ownership. Production deployment is intentionally not implemented yet.
+The frontend is connected to the authoritative API for signed anonymous sessions, matchmaking, realtime chat, account/wallet operations, payments, safety controls, paid preferences, virtual disclosure and favourite reconnect. Browser chat history and favourites remain local-only. Phase 24 is intentionally open until staging, live payment/refund, advertising-provider, load-test and launch evidence pass the documented gates.
 
 ## Checks
 
