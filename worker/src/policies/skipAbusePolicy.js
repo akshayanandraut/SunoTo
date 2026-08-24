@@ -1,0 +1,1 @@
+export function recordSkip(history,now,config){const windowStart=now-config.skipWindowSeconds*1000;const recent=(history||[]).filter(value=>value>=windowStart);if(recent.length>=config.maxSkipsPerWindow)return{allowed:false,history:recent,cooldownUntil:now+config.skipCooldownSeconds*1000};recent.push(now);return{allowed:true,history:recent,cooldownUntil:null};}

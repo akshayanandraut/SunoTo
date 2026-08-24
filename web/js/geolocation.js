@@ -1,0 +1,3 @@
+const KEY="random-chat.location.v1",MAX_AGE_MS=10*60*1000;
+export async function locationForRadius({storage=sessionStorage,geolocation=navigator.geolocation,now=Date.now}={}){const cached=JSON.parse(storage.getItem(KEY)||"null");if(cached&&now()-cached.capturedAt<MAX_AGE_MS)return cached;if(!geolocation)throw new Error("geolocation_unavailable");const position=await new Promise((resolve,reject)=>geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:false,timeout:8000,maximumAge:MAX_AGE_MS}));const value={latitude:position.coords.latitude,longitude:position.coords.longitude,capturedAt:now()};storage.setItem(KEY,JSON.stringify(value));return value;}
+export function clearCachedLocation(storage=sessionStorage){storage.removeItem(KEY);}

@@ -1,0 +1,39 @@
+name = "random-chat-india-api"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+[[durable_objects.bindings]]
+name = "CHAT_SESSION"
+class_name = "ChatSession"
+
+[[durable_objects.bindings]]
+name = "MATCHMAKING"
+class_name = "MatchmakingShard"
+
+[[durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "PresenceShard"
+
+[[durable_objects.bindings]]
+name = "ANONYMOUS"
+class_name = "AnonymousIdentityShard"
+
+[[durable_objects.bindings]]
+name = "DEVICE_OWNERSHIP"
+class_name = "DeviceOwnershipShard"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ChatSession"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["MatchmakingShard", "PresenceShard"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["AnonymousIdentityShard"]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["DeviceOwnershipShard"]

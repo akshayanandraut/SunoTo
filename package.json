@@ -1,0 +1,23 @@
+{
+  "name": "random-chat-india",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build --configLoader native",
+    "preview": "vite preview --host 127.0.0.1",
+    "check": "npm run test && npm run build",
+    "test": "node --test",
+    "worker:dev": "wrangler dev --config worker/wrangler.toml",
+    "worker:build": "vite build --config worker/vite.config.js --configLoader native",
+    "worker:deploy": "wrangler deploy --config worker/wrangler.toml"
+  },
+  "devDependencies": {
+    "vite": "^7.1.3",
+    "wrangler": "^4.31.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.3"
+  }
+}

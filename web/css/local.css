@@ -1,0 +1,4 @@
+.storage-warning{width:min(660px,100%);margin:14px auto;padding:14px 16px;background:#fff3cf;border:1px solid #ead18a;border-radius:14px;color:#5f4b10;font-size:.88rem}
+.saved-list{display:grid;gap:10px;margin:24px 0}
+.saved-item{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px;border:1px solid var(--line);border-radius:15px;background:white}
+.saved-item p{margin:3px 0 0;font-size:.82rem}

@@ -1,0 +1,1 @@
+export const SESSION_DEFAULTS=Object.freeze({freeSeconds:120,skipLockSeconds:30,reconnectGraceSeconds:30,idleWarningSeconds:60,idleGraceSeconds:20,skipWindowSeconds:60,maxSkipsPerWindow:5,skipCooldownSeconds:120,preferenceSearchTimeoutSeconds:30,paidMessageCredits:10,continuationHoldSeconds:300,paidIdleSeconds:300,contactUnlockCredits:500,contactUnlockSeconds:300});

@@ -1,0 +1,28 @@
+import { describe,it } from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { RazorpayService,razorpayInternals } from "../worker/src/services/RazorpayService.js";
+import { PaymentService } from "../worker/src/services/PaymentService.js";
+
+describe("Razorpay cryptographic boundary",()=>{
+  it("verifies checkout signatures over the server order id and payment id",async()=>{const signature=await razorpayInternals.hmac("order_123|pay_456","key-secret"),service=new RazorpayService({keySecret:"key-secret"});assert.equal(await service.verifyCheckout({orderId:"order_123",paymentId:"pay_456",signature}),true);assert.equal(await service.verifyCheckout({orderId:"order_tampered",paymentId:"pay_456",signature}),false);});
+  it("verifies webhooks over the exact raw request body",async()=>{const raw='{"event":"payment.captured", "spacing":"preserved"}',signature=await razorpayInternals.hmac(raw,"hook-secret"),service=new RazorpayService({webhookSecret:"hook-secret"});assert.equal(await service.verifyWebhook(raw,signature),true);assert.equal(await service.verifyWebhook(JSON.stringify(JSON.parse(raw)),signature),false);});
+  it("enforces the ₹50 floor before calling Razorpay",()=>{let called=false;const service=new RazorpayService({fetcher:async()=>{called=true;return Response.json({});}});assert.throws(()=>service.createOrder({amountPaise:4999}),/minimum_recharge_50/);assert.equal(called,false);});
+});
+
+describe("payment reconciliation",()=>{
+  const env={SUPABASE_URL:"https://project.supabase.co",SUPABASE_SERVICE_ROLE_KEY:"service",RAZORPAY_KEY_ID:"rzp_test",RAZORPAY_KEY_SECRET:"secret",RAZORPAY_WEBHOOK_SECRET:"hook"};
+  it("creates a provider order before requesting a server-side offer quote",async()=>{const calls=[];const fetcher=async(url,options={})=>{calls.push({url,options});if(url.includes("api.razorpay.com"))return Response.json({id:"order_1",status:"created"});return Response.json([{credit_amount:10000,offer_name:"Launch 2X Credits",coupon_code:null}]);};const order=await new PaymentService(env,fetcher).createOrder({id:"user-1",emailVerified:true},5000);assert.equal(order.credits,10000);assert.equal(order.offer,"Launch 2X Credits");assert.match(calls[0].url,/razorpay\.com\/v1\/orders/);assert.match(calls[1].url,/rpc\/prepare_payment_order$/);const saved=JSON.parse(calls[1].options.body);assert.equal(saved.target_user_id,"user-1");assert.equal(saved.target_amount_paise,5000);});
+  it("rejects order creation for unverified email",async()=>{await assert.rejects(()=>new PaymentService(env,async()=>Response.json({})).createOrder({id:"u",emailVerified:false},5000),/email_verification_required/);});
+  it("accepts a signed captured webhook and credits via the database RPC",async()=>{const body=JSON.stringify({event:"payment.captured",payload:{payment:{entity:{id:"pay_1",order_id:"order_1",status:"captured"}}}}),signature=await razorpayInternals.hmac(body,"hook"),calls=[];const fetcher=async(url,options={})=>{calls.push({url,options});return Response.json([{balance:5000,idempotent:false}]);};await new PaymentService(env,fetcher).webhook(body,signature,"event-1");assert.match(calls[0].url,/rpc\/record_payment_credit$/);assert.equal(JSON.parse(calls[0].options.body).target_provider_event_id,"event-1");});
+  it("rejects a tampered webhook without writing",async()=>{let called=false;const service=new PaymentService(env,async()=>{called=true;return Response.json([]);});await assert.rejects(()=>service.webhook('{"event":"payment.captured"}',"bad","event-1"),/invalid_webhook_signature/);assert.equal(called,false);});
+  it("maps processed refunds to append-only reversal RPCs",async()=>{const body=JSON.stringify({event:"refund.processed",payload:{refund:{entity:{id:"rfnd_1",payment_id:"pay_1",amount:2500}}}}),signature=await razorpayInternals.hmac(body,"hook"),calls=[];await new PaymentService(env,async(url,options)=>{calls.push({url,options});return Response.json([{balance:2500}]);}).webhook(body,signature,"event-refund");assert.match(calls[0].url,/rpc\/record_payment_refund$/);assert.equal(JSON.parse(calls[0].options.body).refund_amount_paise,2500);});
+});
+
+describe("phase 9 database safeguards",()=>{
+  it("deduplicates provider events and payment wallet entries",async()=>{const sql=await readFile(new URL("../supabase/migrations/202608240003_phase9_payments.sql",import.meta.url),"utf8");assert.match(sql,/provider_event_id text not null unique/i);assert.match(sql,/provider_order_id text not null unique/i);assert.match(sql,/for update/i);assert.match(sql,/razorpay:payment:/i);assert.match(sql,/razorpay:refund:/i);assert.match(sql,/grant execute on function public\.record_payment_credit[\s\S]*service_role/i);assert.doesNotMatch(sql,/create table(?: if not exists)? public\.messages/i);});
+});
+
+describe("phase 10 offer safeguards",()=>{
+  it("stores the launch multiplier and exact IST expiry as configuration",async()=>{const sql=await readFile(new URL("../supabase/migrations/202608250001_phase10_offers.sql",import.meta.url),"utf8");assert.match(sql,/Launch 2X Credits',20000/);assert.match(sql,/2026-09-30 23:59:59\+05:30/);assert.match(sql,/max_redemptions integer/);assert.match(sql,/max_uses_per_account integer/);assert.match(sql,/for update/i);assert.match(sql,/coupon_redemptions/);assert.match(sql,/grant execute on function public\.prepare_payment_order[\s\S]*service_role/i);assert.doesNotMatch(sql,/create table(?: if not exists)? public\.messages/i);});
+});

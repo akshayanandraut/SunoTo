@@ -1,0 +1,3 @@
+export const USERNAME_DEFAULTS=Object.freeze({maxChanges:3,cooldownDays:30});
+export function validUsername(value){return/^[A-Za-z0-9_]{3,24}$/.test(String(value||""))}
+export function usernameChangeDecision(profile,now=Date.now(),config=USERNAME_DEFAULTS){if(!profile?.username)return{allowed:true};if(profile.usernameChangeCount>=config.maxChanges)return{allowed:false,reason:"username_change_limit_reached"};const availableAt=new Date(profile.usernameChangedAt).getTime()+config.cooldownDays*86400000;if(now<availableAt)return{allowed:false,reason:"username_change_cooldown",availableAt};return{allowed:true};}
