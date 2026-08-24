@@ -9,6 +9,7 @@ const user=(identityId,extra={})=>({identityId,blockedPeerIds:[],queuedAt:0,...e
 describe("random match policy",()=>{
   it("never matches an identity to itself",()=>assert.equal(isEligibleRandomPair(user("identity-a"),user("identity-a")),false));
   it("excludes blocks, inactive candidates, and active identities",()=>{assert.equal(isEligibleRandomPair(user("identity-a",{blockedPeerIds:["identity-b"]}),user("identity-b")),false);assert.equal(isEligibleRandomPair(user("identity-a"),user("identity-b",{idle:true})),false);assert.equal(isEligibleRandomPair(user("identity-a"),user("identity-b"),{"identity-b":{sessionId:"s"}}),false);});
+  it("enforces registered blocks through opaque public references",()=>assert.equal(isEligibleRandomPair(user("identity-a",{blockedRefs:["public-b"]}),user("identity-b",{accountUserId:"user-b",accountPublicId:"public-b"})),false));
   it("selects the longest-waiting eligible person",()=>{const found=selectRandomCandidate(user("identity-a"),[user("identity-new",{queuedAt:20}),user("identity-old",{queuedAt:10})],{});assert.equal(found.identityId,"identity-old");});
 });
 
@@ -17,8 +18,10 @@ describe("matchmaking lifecycle",()=>{
   it("enforces one active chat per identity",()=>{const service=new MatchmakingService();service.search(user("identity-a"),()=>1);service.search(user("identity-b"),()=>2,()=>"session-1");assert.equal(service.search(user("identity-a")).status,"already_active");});
   it("cleans both active claims when a session ends",()=>{const service=new MatchmakingService();service.search(user("identity-a"),()=>1);service.search(user("identity-b"),()=>2,()=>"session-1");assert.equal(service.end("identity-a","session-1").status,"ended");assert.deepEqual(service.active,{});assert.equal(service.result("identity-b").status,"idle");});
   it("replaces duplicate waiting searches without restarting the timeout",()=>{const service=new MatchmakingService();service.search(user("identity-a"),()=>1);service.search(user("identity-a"),()=>2);assert.equal(service.queue.length,1);assert.equal(service.queue[0].queuedAt,1);});
+  it("returns a registered peer public reference without replacing the session identity",()=>{const service=new MatchmakingService();service.search(user("identity-a",{accountPublicId:"public-a"}),()=>1);const match=service.search(user("identity-b",{accountPublicId:"public-b"}),()=>2,()=>"session-public");assert.equal(match.peerId,"identity-a");assert.equal(match.peerRef,"public-a");assert.equal(service.result("identity-a").peerRef,"public-b");});
 });
 
 describe("ephemeral presence",()=>{
   it("tracks real statuses without persistent storage",async()=>{const shard=new PresenceShard();await shard.fetch(new Request("https://presence/status",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({identityId:"identity-a",status:"waiting",anonymous:true})}));const response=await shard.fetch(new Request("https://presence/stats"));const stats=await response.json();assert.equal(stats.waiting,1);assert.equal(stats.anonymousOnline,1);assert.equal(Object.hasOwn(shard,"state"),false);});
+  it("resolves a registered public reference to the current ephemeral identity",async()=>{const shard=new PresenceShard();await shard.fetch(new Request("https://presence/status",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({identityId:"identity-device",status:"online",anonymous:false,accountUserId:"account-user",publicRef:"public-user"})}));const found=await(await shard.fetch(new Request("https://presence/identity/public-user"))).json();assert.deepEqual(found,{online:true,status:"online",identityId:"identity-device",publicRef:"public-user",accountUserId:"account-user"});});
 });
