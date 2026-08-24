@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { adDecision,normalizeAdConfig } from "../worker/src/policies/adPolicy.js";
 import { ConfigService,clearConfigCache } from "../worker/src/services/ConfigService.js";
 import { adminUser } from "../worker/src/index.js";
+import { adProviderFor,registerAdProvider } from "../web/js/ads.js";
 
 const enabled={enabled:true,provider:"house",adFreeBalanceThreshold:1000,interstitialEveryScans:5,placements:{top:true,bottom:true,desktopSide:true,interstitial:true}};
 
@@ -12,6 +13,11 @@ describe("three-tier ad policy",()=>{
   it("removes interstitials from balances 1 through 1000",()=>{for(const balance of [1,500,1000]){const result=adDecision({registered:true,balance,scanCount:5,config:enabled});assert.equal(result.tier,"registered_low_balance");assert.equal(result.placements.includes("interstitial"),false);}});
   it("is ad-free only above 1000 Credits and respects the kill switch",()=>{assert.deepEqual(adDecision({registered:true,balance:1001,config:enabled}).placements,[]);assert.equal(adDecision({registered:true,balance:1001,config:enabled}).tier,"ad_free");assert.equal(adDecision({config:{...enabled,enabled:false}}).tier,"disabled");});
   it("rejects malformed provider and numeric configuration",()=>{assert.throws(()=>normalizeAdConfig({...enabled,provider:"<script>"}),/invalid_ad_provider/);assert.throws(()=>normalizeAdConfig({...enabled,interstitialEveryScans:0}),/invalid_interstitial_frequency/);});
+});
+
+describe("replaceable browser ad provider",()=>{
+  it("registers a reviewed adapter and can remove it with a kill-safe fallback",()=>{const unregister=registerAdProvider("reviewed-network",()=>({mount(){}}));assert.equal(typeof adProviderFor("reviewed-network").mount,"function");unregister();const slot={remove(){this.removed=true;}};adProviderFor("reviewed-network").mount(slot);assert.equal(slot.removed,true);});
+  it("rejects reserved, malformed and mount-less adapters",()=>{assert.throws(()=>registerAdProvider("house",()=>({mount(){}})),/invalid_ad_provider_registration/);assert.throws(()=>registerAdProvider("<bad>",()=>({mount(){}})),/invalid_ad_provider_registration/);assert.throws(()=>registerAdProvider("network",()=>({})),/invalid_ad_provider_registration/);});
 });
 
 describe("versioned ad configuration",()=>{

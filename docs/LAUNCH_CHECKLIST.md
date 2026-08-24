@@ -18,6 +18,7 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 ## Advertising
 
 - Select a provider only after policy/privacy review. Implement it behind `adProviderFor`; do not place provider secrets in browser configuration.
+- Register the reviewed adapter through `registerAdProvider`. Adapter failures must remove their slot rather than break matching/chat UI. Update and review CSP domains before enabling it.
 - Validate mobile layout, desktop side placement, every-fifth-scan interstitial, 1–1,000 Credit no-interstitial tier, above-1,000 Credit ad-free tier and global kill switch.
 - Keep ads disabled if the provider, consent model or content categories are unresolved.
 
