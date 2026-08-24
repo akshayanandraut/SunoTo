@@ -7,6 +7,8 @@ export class AdminService{
   async users(limit=50,offset=0){return this.rpc("admin_list_users",{result_limit:limit,result_offset:offset})}
   async reports(){const [reports,risks]=await Promise.all([this.request("/reports?select=id,session_id,reporter_ref,target_ref,reason,weight,created_at&order=created_at.desc&limit=100"),this.request("/risk_scores?select=target_ref,recent_score,lifetime_score,unique_reporters,last_report_at")]),byTarget=Object.fromEntries(risks.map(item=>[item.target_ref,item]));return reports.map(report=>({...report,risk:byTarget[report.target_ref]||null}))}
   restrictions(){return this.request("/restrictions?select=target_ref,status,reason,active,updated_at&order=updated_at.desc&limit=100")}
+  grievances(){return this.request("/grievances?select=id,email,category,description,status,received_at,acknowledged_at,resolved_at&order=received_at.desc&limit=100")}
+  updateGrievance({adminId,id,status}){return this.rpc("admin_update_grievance",{admin_id:adminId,target_id:id,new_status:status})}
   promotions(type){const table=type==="coupon"?"coupons":"offers";return this.request(`/${table}?select=*&order=created_at.desc&limit=100`)}
   audit(){return this.request("/admin_audit?select=id,admin_user_id,action,target_type,target_ref,created_at&order=created_at.desc&limit=100")}
   ledger(userId){return this.request(`/wallet_ledger?select=id,delta,balance_after,entry_type,reason,created_at&user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=100`)}

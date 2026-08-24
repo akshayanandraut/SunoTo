@@ -3,7 +3,7 @@ export function header() {
 }
 
 export function footer() {
-  return `<footer class="footer container"><span class="brand">Random Chat India</span><nav><a href="/community-guidelines.html">Guidelines</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="/admin.html">Admin</a></nav><small class="muted">18+ · Text only · Built for India</small></footer>`;
+  return `<footer class="footer container"><span class="brand">Random Chat India</span><nav><a href="/community-guidelines.html">Guidelines</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="/grievance.html">Grievance</a><a href="/admin.html">Admin</a></nav><small class="muted">18+ · Text only · Built for India</small></footer>`;
 }
 
 export function nav(active) {

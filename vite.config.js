@@ -9,6 +9,7 @@ export default defineConfig({
       input: {
         main: "web/index.html",
         admin: "web/admin.html",
+        grievance: "web/grievance.html",
         privacy: "web/privacy.html",
         terms: "web/terms.html",
         guidelines: "web/community-guidelines.html"

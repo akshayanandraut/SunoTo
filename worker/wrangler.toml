@@ -22,6 +22,10 @@ class_name = "AnonymousIdentityShard"
 name = "DEVICE_OWNERSHIP"
 class_name = "DeviceOwnershipShard"
 
+[[durable_objects.bindings]]
+name = "RATE_LIMIT"
+class_name = "RateLimitShard"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ChatSession"]
@@ -37,3 +41,7 @@ new_sqlite_classes = ["AnonymousIdentityShard"]
 [[migrations]]
 tag = "v4"
 new_sqlite_classes = ["DeviceOwnershipShard"]
+
+[[migrations]]
+tag = "v5"
+new_sqlite_classes = ["RateLimitShard"]
