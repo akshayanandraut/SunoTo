@@ -3,9 +3,9 @@ import { pathToFileURL } from "node:url";
 
 const websocketOrigin=value=>{const url=new URL(value);url.protocol="wss:";return url.origin;};
 export function renderProductionHeaders(template,{apiBaseUrl,supabaseUrl}){
-  const origins=[new URL(apiBaseUrl).origin,websocketOrigin(apiBaseUrl),new URL(supabaseUrl).origin,websocketOrigin(supabaseUrl)];
-  if(origins.some(origin=>!origin.startsWith("https://")&&!origin.startsWith("wss://")))throw new Error("Production connect origins must use HTTPS/WSS");
-  const rendered=template.replace(/(Content-Security-Policy:.*?connect-src )([^;]+)/,(_match,prefix,current)=>`${prefix}${[...new Set([...current.split(/\s+/),...origins])].join(" ")}`);
+  const origins=["'self'",new URL(apiBaseUrl).origin,websocketOrigin(apiBaseUrl),new URL(supabaseUrl).origin,websocketOrigin(supabaseUrl),"https://api.razorpay.com"];
+  if(origins.slice(1,-1).some(origin=>!origin.startsWith("https://")&&!origin.startsWith("wss://")))throw new Error("Production connect origins must use HTTPS/WSS");
+  const rendered=template.replace(/(Content-Security-Policy:.*?connect-src )([^;]+)/,(_match,prefix)=>`${prefix}${[...new Set(origins)].join(" ")}`);
   if(rendered===template)throw new Error("Content-Security-Policy connect-src was not found");
   return rendered;
 }
