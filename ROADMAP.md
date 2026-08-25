@@ -1857,6 +1857,7 @@ Repository launch tooling completed:
 - [x] revision-bound Worker and Cloudflare Pages deploy wrappers
 - [x] clean tracked Git checkout verification before either deployment
 - [x] Phase 24 evidence schema and fail-closed validator
+- [x] clean-checkout evidence draft generator that preserves external placeholders
 
 External completion evidence still pending:
 

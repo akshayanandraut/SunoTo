@@ -49,4 +49,8 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 
 Validate the completed record against the exact release commit with `node scripts/validate-launch-evidence.mjs path/to/evidence.json <40-character-release-sha>`. The command fails if the record names another revision or uses missing/future completion timestamps.
 
+
+Create a release-bound working record with `RELEASE_REVISION=<full-sha> EVIDENCE_PATH=<new-evidence.json> SMOKE_REPORT_PATH=<smoke.json> REALTIME_REPORT_PATH=<realtime.json> npm run launch:evidence:init`. The command requires the exact clean Git checkout, verifies both reports, writes their relative paths and fingerprints, and refuses to overwrite an existing draft.
+
+The generated record intentionally keeps every external reference, approval and completion field as a placeholder. Fill those only from real evidence, then run `npm run launch:validate -- <evidence.json> <full-sha>`.
 The evidence file must include local smoke and realtime report paths relative to the evidence JSON. The validator opens both files, verifies their kind and release revision, recomputes their SHA-256 fingerprints, and fails if either artifact was replaced.
