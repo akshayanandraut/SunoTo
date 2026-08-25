@@ -38,8 +38,10 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 ## Evidence required to check Phase 24
 
 - Staging URL and smoke-test timestamp/commit.
-- Successful controlled live payment and refund provider references with ledger reconciliation.
-- Approved ad provider and tier/kill-switch verification.
+- Immutable frontend/Worker versions, applied migration version, backup reference and restore-drill timestamp.
+- Staging smoke report reference in addition to its URL and timestamp.
+- Successful controlled live payment and refund provider references with a ledger reconciliation reference.
+- Approved ad provider, review reference and tier/kill-switch verification.
 - Spike/soak report with cleanup evidence.
 - Reddit post URL and moderation/feedback monitoring owner.
 
