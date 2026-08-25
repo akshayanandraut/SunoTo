@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { isExactPreferencePair,normalizePaidPreferences,preferenceFee,satisfiesPreference } from "../worker/src/policies/preferencePolicy.js";
 import { MatchmakingService } from "../worker/src/services/MatchmakingService.js";
+import { MatchmakingShard } from "../worker/src/durable/MatchmakingShard.js";
 import { PreferenceChargeService } from "../worker/src/services/PreferenceChargeService.js";
 
 const person=(identityId,profile,preferences={})=>({identityId,profile,preferences,blockedPeerIds:[],available:true});
@@ -20,6 +21,7 @@ describe("preference matchmaking",()=>{
 describe("preference charge boundary",()=>{
   it("does not debit fallback matches",async()=>{let called=false;const result=await new PreferenceChargeService({fetcher:async()=>{called=true;return Response.json([]);}}).chargePair({sessionId:"session-1",left:{result:{criteriaSatisfied:false,preferenceFee:125}},right:{result:{}}});assert.equal(result.charged,0);assert.equal(called,false);});
   it("uses one transactional RPC for both exact-result debits",async()=>{let body;const service=new PreferenceChargeService({url:"https://project",serviceKey:"service",fetcher:async(_url,options)=>{body=JSON.parse(options.body);return Response.json([{left_balance:875,right_balance:950,idempotent:false}]);}});const result=await service.chargePair({sessionId:"session-1",left:{userId:"user-1",result:{criteriaSatisfied:true,matchMode:"preference",preferenceFee:125}},right:{userId:"user-2",result:{criteriaSatisfied:true,matchMode:"preference",preferenceFee:50}}});assert.equal(result.charged,175);assert.equal(body.left_fee,125);assert.equal(body.right_fee,50);assert.equal(body.target_session_id,"session-1");});
+  it("charges an exact shard match through the injected server fetch boundary",async()=>{const values=new Map(),state={storage:{get:key=>values.get(key),put:(key,value)=>values.set(key,structuredClone(value))}},calls=[],env={SUPABASE_URL:"https://project",SUPABASE_SERVICE_ROLE_KEY:"service",FETCHER:async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return Response.json([{left_balance:950,idempotent:false}]);}},shard=new MatchmakingShard(state,env),search=body=>shard.fetch(new Request("https://match.internal/search",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}));await search({identityId:"identity-candidate",accountUserId:"user-candidate",profile:{age:25,gender:"Female",languages:["English"],interests:[]}});const response=await search({identityId:"identity-seeker",accountUserId:"user-seeker",profile:{age:30,gender:"Male",languages:["English"],interests:[]},preferences:{gender:"Female"}}),result=await response.json();assert.equal(result.status,"matched");assert.equal(calls.length,1);assert.match(calls[0].url,/charge_preference_match$/);assert.equal(calls[0].body.left_user_id,"user-seeker");assert.equal(calls[0].body.left_fee,50);});
 });
 
 describe("phase 12 money safeguards",()=>{
@@ -27,5 +29,6 @@ describe("phase 12 money safeguards",()=>{
 });
 
 describe("preference self-charge defense",()=>{
+  it("rejects a same-account pair before calling the database",async()=>{let called=false;const paid={criteriaSatisfied:true,matchMode:"preference",preferenceFee:50},service=new PreferenceChargeService({fetcher:async()=>{called=true;return Response.json([]);}});await assert.rejects(()=>service.chargePair({sessionId:"session-1",left:{userId:"user-1",result:paid},right:{userId:"user-1",result:{}}}),/same_account_preference_pair/);assert.equal(called,false);});
   it("rejects a same-account pair before either transactional debit",async()=>{const sql=await readFile(new URL("../supabase/migrations/202608250013_preference_self_charge_guard.sql",import.meta.url),"utf8"),guard=sql.indexOf("same_account_preference_pair"),debit=sql.indexOf("public.apply_wallet_entry");assert.ok(guard>0);assert.ok(debit>guard);assert.match(sql,/left_user_id is not null and left_user_id=right_user_id/i);assert.match(sql,/grant execute on function public\.charge_preference_match[\s\S]*service_role/i);});
 });
