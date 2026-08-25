@@ -26,6 +26,8 @@ Monitor delivery, bounce and complaint rates. Suspend sends and investigate if t
 
 Set Worker secrets with `wrangler secret put`; never commit values. Required production values are `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `ANON_SESSION_SECRET`, `ADMIN_USER_ID`, `ALLOWED_ORIGIN`, `GRIEVANCE_OFFICER_NAME` and `GRIEVANCE_EMAIL`. Keep `ADMIN_REQUIRE_AAL2=true`. Set the non-secret `RELEASE_REVISION` to the exact full Git SHA for every Worker deployment; staging smoke fails if `/health` reports another revision.
 
+Deploy the Worker with `RELEASE_REVISION=<full-sha> npm run worker:deploy`. Use `DRY_RUN=true` to compile without uploading and `WRANGLER_ENV=staging` for the bounded staging environment. The wrapper injects the exact SHA, uses strict conflict detection and preserves existing dashboard variables; do not bypass it with a raw Wrangler deploy.
+
 `ALLOWED_ORIGIN` must be the exact HTTPS frontend origin. The anonymous signing secret must contain at least 32 cryptographically random bytes. Configure Cloudflare access/log retention to avoid request bodies and sensitive headers.
 
 Run `pnpm production:build` with the intended production environment. It validates the public and server settings, builds the frontend, and renders the exact API and Supabase HTTPS/WSS origins into `dist/_headers`; do not deploy a plain local-default build.
