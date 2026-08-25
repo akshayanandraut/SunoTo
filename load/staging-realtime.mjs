@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { requireReleaseRevision,writeLaunchReport } from "../scripts/launch-report.mjs";
+import { requireReleaseRevision,writeFingerprintedLaunchReport } from "../scripts/launch-report.mjs";
 
 const DEFAULT_TIMEOUT_MS=15000;
 const clampInteger=(value,fallback,min,max)=>{const parsed=Number(value??fallback);if(!Number.isInteger(parsed)||parsed<min||parsed>max)throw new Error(`Expected an integer from ${min} to ${max}`);return parsed;};
@@ -26,4 +26,4 @@ async function runPair(index,options,{fetcher,WebSocketImpl,clock}){const suffix
 
 export async function runRealtimeProbe(options,{fetcher=fetch,WebSocketImpl=WebSocket,clock=()=>performance.now()}={}){const results=new Array(options.pairs),workers=Array.from({length:Math.min(options.pairs,options.concurrency)},async(_,worker)=>{for(let index=worker;index<options.pairs;index+=options.concurrency)results[index]=await runPair(index,options,{fetcher,WebSocketImpl,clock});});await Promise.all(workers);return{generatedAt:new Date().toISOString(),apiUrl:options.apiUrl,...summarizeRealtimeResults(results)};}
 
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){let options;try{options=probeOptions(process.env);const report=await runRealtimeProbe(options);console.log(JSON.stringify(report,null,2));if(report.failures)process.exitCode=1;else if(process.env.REALTIME_REPORT_PATH){report.kind="staging-realtime";report.revision=requireReleaseRevision(process.env.RELEASE_REVISION);report.webOrigin=options.webOrigin;await writeLaunchReport(process.env.REALTIME_REPORT_PATH,report);console.log(`Report written to ${process.env.REALTIME_REPORT_PATH}`);}}catch(error){console.error(error.message);process.exitCode=1;}}
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){let options;try{options=probeOptions(process.env);const report=await runRealtimeProbe(options);console.log(JSON.stringify(report,null,2));if(report.failures)process.exitCode=1;else if(process.env.REALTIME_REPORT_PATH){report.kind="staging-realtime";report.revision=requireReleaseRevision(process.env.RELEASE_REVISION);report.webOrigin=options.webOrigin;const {fingerprint}=await writeFingerprintedLaunchReport(process.env.REALTIME_REPORT_PATH,report);console.log(`Report written to ${process.env.REALTIME_REPORT_PATH}`);console.log(`Report SHA-256: ${fingerprint}`);}}catch(error){console.error(error.message);process.exitCode=1;}}

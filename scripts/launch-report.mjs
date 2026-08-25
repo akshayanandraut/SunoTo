@@ -12,3 +12,8 @@ export async function fingerprintLaunchReport(path,expectedRevision,expectedKind
   return launchReportFingerprint(content);
 }
 export async function writeLaunchReport(path,report){if(!path)throw new Error("report path is required");await writeFile(path,`${JSON.stringify(report,null,2)}\n`,{encoding:"utf8",flag:"wx"});return path;}
+export async function writeFingerprintedLaunchReport(path,report){
+  await writeLaunchReport(path,report);
+  const fingerprint=await fingerprintLaunchReport(path,report.revision,report.kind);
+  return{path,fingerprint};
+}
