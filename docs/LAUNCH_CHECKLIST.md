@@ -28,7 +28,8 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 
 ## Spike and soak
 
-- Run `k6 run -e STAGING_API_URL=https://.../api/v1 load/staging-spike.js` from approved infrastructure. The default public-edge spike requires p95 <500 ms, p99 <1 s and <1% failures.
+- Run `k6 run -e STAGING_API_URL=https://.../api/v1 -e RELEASE_REVISION=<full-sha> -e SPIKE_REPORT_PATH=<new-report.json> load/staging-spike.js` from approved infrastructure. The command requires HTTPS, a full release SHA and a new report path; the default public-edge spike requires p95 <500 ms, p99 <1 s and <1% failures.
+- Independently fingerprint the structured report with `node scripts/fingerprint-launch-report.mjs <report.json> <full-sha> staging-spike` before recording its latency, failure-rate and peak-VU metrics.
 - Run `STAGING_API_URL=https://.../api/v1 STAGING_WEB_ORIGIN=https://... REALTIME_PAIRS=10 REALTIME_CONCURRENCY=2 RELEASE_REVISION=<full-sha> REALTIME_REPORT_PATH=<new-report.json> node load/staging-realtime.mjs` from approved distributed runners. It uses disposable signed identities and measures match, WebSocket upgrade, relay, reconnect and cleanup paths. Each runner is deliberately capped at 50 pairs and concurrency 10; respect production abuse limits instead of adding a hidden bypass. Successful runs refuse to overwrite an existing report.
 - The realtime command prints the report SHA-256 after writing it. Record it in the load evidence and independently recheck it with `node scripts/fingerprint-launch-report.mjs <report.json> <full-sha> staging-realtime`.
 - Confirm queues/active claims return to zero and no chat payload persisted. Record the test ID, revision, region mix, peak VUs, results and cleanup evidence.

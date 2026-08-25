@@ -1853,6 +1853,7 @@ Repository launch tooling completed:
 
 - [x] production configuration and security-header gates
 - [x] immutable staging smoke and realtime reports with automatic SHA-256 output, full release binding, and file-backed evidence verification
+- [x] revision-bound structured k6 spike reports with measured threshold data
 - [x] Worker health and frontend manifest revision verification
 - [x] revision-bound Worker and Cloudflare Pages deploy wrappers
 - [x] clean tracked Git checkout verification before either deployment
