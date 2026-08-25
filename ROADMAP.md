@@ -1849,11 +1849,22 @@ Goal: normal free message relay should not hit Postgres per message.
 
 ## Phase 24 — Load/launch
 
-- staging
-- live payment
-- ad provider
-- spike test
-- Reddit launch
+Repository launch tooling completed:
+
+- [x] production configuration and security-header gates
+- [x] immutable staging smoke and realtime reports bound to a full release SHA
+- [x] Worker health and frontend manifest revision verification
+- [x] revision-bound Worker and Cloudflare Pages deploy wrappers
+- [x] clean tracked Git checkout verification before either deployment
+- [x] Phase 24 evidence schema and fail-closed validator
+
+External completion evidence still pending:
+
+- [ ] deploy and verify staging
+- [ ] reconcile one controlled live payment and refund
+- [ ] review and verify the production ad provider and kill switch
+- [ ] run the approved spike/soak test and verify cleanup/privacy
+- [ ] publish and monitor the Reddit launch
 
 ---
 

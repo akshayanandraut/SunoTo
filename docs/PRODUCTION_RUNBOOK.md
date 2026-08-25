@@ -36,6 +36,8 @@ The production build also writes `dist/release.json` with the exact `RELEASE_REV
 
 Deploy Pages only with `RELEASE_REVISION=<full-sha> CLOUDFLARE_PAGES_PROJECT=<name> PAGES_BRANCH=<branch> npm run frontend:deploy`. The command rebuilds the production artifact, refuses to upload when `dist/release.json` names another revision, and binds the Pages deployment metadata to the same SHA.
 
+Both deploy wrappers verify that `RELEASE_REVISION` is the current Git `HEAD` and that tracked files are clean before upload. Untracked local environment files are intentionally excluded from this source-integrity check and must still remain uncommitted.
+
 ## Data rights, retention and grievances
 
 - Test account export and deletion requests with an ordinary verified account.

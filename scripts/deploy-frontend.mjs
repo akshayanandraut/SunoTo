@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath,pathToFileURL } from "node:url";
 import { requireReleaseRevision } from "./launch-report.mjs";
+import { verifyReleaseCheckout } from "./git-release.mjs";
 
 const PROJECT=/^[a-z0-9](?:[a-z0-9-]{0,56}[a-z0-9])?$/;
 const BRANCH=/^[a-z0-9][a-z0-9._/-]{0,127}$/i;
@@ -32,7 +33,8 @@ export async function verifyFrontendArtifact(env={},read=readFile){
   return manifest;
 }
 
-export async function runFrontendDeploy(env=process.env,runner=spawnSync,read=readFile){
+export async function runFrontendDeploy(env=process.env,runner=spawnSync,read=readFile,gitRunner=spawnSync){
+  verifyReleaseCheckout(env.RELEASE_REVISION,gitRunner);
   await verifyFrontendArtifact(env,read);
   const cli=fileURLToPath(new URL("../node_modules/wrangler/bin/wrangler.js",import.meta.url));
   const result=runner(process.execPath,[cli,...frontendDeployArguments(env)],{

@@ -33,7 +33,7 @@ describe("revision-bound frontend deployment",()=>{
     await runFrontendDeploy(env,(command,args,options)=>{
       invocation={command,args,options};
       return {status:0};
-    },async()=>JSON.stringify({revision}));
+    },async()=>JSON.stringify({revision}),(_command,args)=>({status:0,stdout:args.includes("rev-parse")?revision:""}));
     assert.equal(invocation.command,process.execPath);
     assert.match(invocation.args[0],/wrangler[\\/]bin[\\/]wrangler\.js$/);
     assert.deepEqual(invocation.args.slice(1),frontendDeployArguments(env));
