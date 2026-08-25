@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { adDecision,normalizeAdConfig } from "../worker/src/policies/adPolicy.js";
 import { ConfigService,clearConfigCache } from "../worker/src/services/ConfigService.js";
 import { adminUser } from "../worker/src/index.js";
-import { adProviderFor,registerAdProvider } from "../web/js/ads.js";
+import { adProviderFor,loadPublicAdConfig,loadPublicAdSnapshot,registerAdProvider } from "../web/js/ads.js";
 
 const enabled={enabled:true,provider:"house",adFreeBalanceThreshold:1000,interstitialEveryScans:5,placements:{top:true,bottom:true,desktopSide:true,interstitial:true}};
 
@@ -18,6 +18,7 @@ describe("three-tier ad policy",()=>{
 describe("replaceable browser ad provider",()=>{
   it("registers a reviewed adapter and can remove it with a kill-safe fallback",()=>{const unregister=registerAdProvider("reviewed-network",()=>({mount(){}}));assert.equal(typeof adProviderFor("reviewed-network").mount,"function");unregister();const slot={remove(){this.removed=true;}};adProviderFor("reviewed-network").mount(slot);assert.equal(slot.removed,true);});
   it("rejects reserved, malformed and mount-less adapters",()=>{assert.throws(()=>registerAdProvider("house",()=>({mount(){}})),/invalid_ad_provider_registration/);assert.throws(()=>registerAdProvider("<bad>",()=>({mount(){}})),/invalid_ad_provider_registration/);assert.throws(()=>registerAdProvider("network",()=>({})),/invalid_ad_provider_registration/);});
+  it("loads a versioned public snapshot and rejects an unversioned response",async()=>{const snapshot=await loadPublicAdSnapshot(async()=>Response.json({ads:enabled,version:4}));assert.deepEqual(snapshot,{config:enabled,version:4});assert.deepEqual(await loadPublicAdConfig(async()=>Response.json({ads:enabled,version:4})),enabled);await assert.rejects(()=>loadPublicAdSnapshot(async()=>Response.json({ads:enabled})),/invalid_public_config/);});
 });
 
 describe("versioned ad configuration",()=>{
