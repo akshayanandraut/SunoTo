@@ -1852,7 +1852,7 @@ Goal: normal free message relay should not hit Postgres per message.
 Repository launch tooling completed:
 
 - [x] production configuration and security-header gates
-- [x] immutable staging smoke and realtime reports bound to a full release SHA and SHA-256 content fingerprints
+- [x] immutable staging smoke and realtime reports bound to a full release SHA, SHA-256 content fingerprints, and file-backed evidence verification
 - [x] Worker health and frontend manifest revision verification
 - [x] revision-bound Worker and Cloudflare Pages deploy wrappers
 - [x] clean tracked Git checkout verification before either deployment

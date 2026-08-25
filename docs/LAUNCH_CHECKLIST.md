@@ -48,3 +48,5 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 - Reddit post URL and moderation/feedback monitoring owner.
 
 Validate the completed record against the exact release commit with `node scripts/validate-launch-evidence.mjs path/to/evidence.json <40-character-release-sha>`. The command fails if the record names another revision or uses missing/future completion timestamps.
+
+The evidence file must include local smoke and realtime report paths relative to the evidence JSON. The validator opens both files, verifies their kind and release revision, recomputes their SHA-256 fingerprints, and fails if either artifact was replaced.

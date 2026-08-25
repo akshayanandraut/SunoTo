@@ -1,9 +1,9 @@
 {
   "revision": "replace-with-40-character-release-commit",
   "release": {"frontendVersion": "replace", "workerVersion": "replace", "migrationVersion": "replace", "backupReference": "replace", "restoreDrillAt": "replace-with-iso-timestamp"},
-  "staging": {"webUrl": "https://replace.invalid", "apiUrl": "https://replace.invalid/api/v1", "smokeReportReference": "replace", "smokeReportSha256": "replace-with-64-character-sha256", "smokePassedAt": "replace-with-iso-timestamp"},
+  "staging": {"webUrl": "https://replace.invalid", "apiUrl": "https://replace.invalid/api/v1", "smokeReportReference": "replace", "smokeReportPath": "replace-with-local-report-path", "smokeReportSha256": "replace-with-64-character-sha256", "smokePassedAt": "replace-with-iso-timestamp"},
   "payment": {"liveOrderReference": "replace", "livePaymentReference": "replace", "refundReference": "replace", "ledgerReference": "replace", "ledgerReconciled": false, "reconciledAt": "replace-with-iso-timestamp"},
   "advertising": {"provider": "replace", "reviewReference": "replace", "tiersVerifiedAt": "replace-with-iso-timestamp", "killSwitchVerified": false},
-  "load": {"reportReference": "replace", "reportSha256": "replace-with-64-character-sha256", "peakVirtualUsers": 0, "p95Milliseconds": 0, "p99Milliseconds": 0, "failureRate": 1, "queuesClean": false, "noTranscriptPersistenceVerified": false, "completedAt": "replace-with-iso-timestamp"},
+  "load": {"reportReference": "replace", "reportPath": "replace-with-local-report-path", "reportSha256": "replace-with-64-character-sha256", "peakVirtualUsers": 0, "p95Milliseconds": 0, "p99Milliseconds": 0, "failureRate": 1, "queuesClean": false, "noTranscriptPersistenceVerified": false, "completedAt": "replace-with-iso-timestamp"},
   "reddit": {"postUrl": "https://replace.invalid", "monitoringOwner": "replace", "postedAt": "replace-with-iso-timestamp"}
 }
