@@ -13,7 +13,7 @@
     "worker:build": "vite build --config worker/vite.config.js --configLoader native",
     "worker:deploy": "node scripts/deploy-worker.mjs",
     "production:validate": "node scripts/validate-production-config.mjs",
-    "production:build": "npm run production:validate && npm run build && node scripts/render-production-headers.mjs",
+    "production:build": "npm run production:validate && npm run build && node scripts/render-production-headers.mjs && node scripts/write-release-manifest.mjs",
     "staging:smoke": "node scripts/staging-smoke.mjs",
     "staging:realtime": "node load/staging-realtime.mjs",
     "launch:validate": "node scripts/validate-launch-evidence.mjs"

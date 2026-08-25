@@ -32,6 +32,8 @@ Deploy the Worker with `RELEASE_REVISION=<full-sha> npm run worker:deploy`. Use 
 
 Run `pnpm production:build` with the intended production environment. It validates the public and server settings, builds the frontend, and renders the exact API and Supabase HTTPS/WSS origins into `dist/_headers`; do not deploy a plain local-default build.
 
+The production build also writes `dist/release.json` with the exact `RELEASE_REVISION`. Serve it with `Cache-Control: no-store`; the staging smoke gate compares this manifest and the Worker health revision to the same full Git SHA so a mixed release cannot pass.
+
 ## Data rights, retention and grievances
 
 - Test account export and deletion requests with an ordinary verified account.
