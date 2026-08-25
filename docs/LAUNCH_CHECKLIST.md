@@ -6,7 +6,7 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 
 - Deploy all Supabase migrations, the Worker and the static frontend to isolated staging projects.
 - Set exact staging origins and staging/test provider keys. Keep production data and secrets out of staging.
-- Run `STAGING_API_URL=https://.../api/v1 STAGING_WEB_ORIGIN=https://... node scripts/staging-smoke.mjs` and attach its output to the release record.
+- Run `STAGING_API_URL=https://.../api/v1 STAGING_WEB_ORIGIN=https://... RELEASE_REVISION=<full-sha> SMOKE_REPORT_PATH=<new-report.json> node scripts/staging-smoke.mjs` and attach the immutable report to the release record. The command refuses to overwrite an existing report.
 - Test two real browsers through match, reconnect, idle, report/block, virtual disclosure, data export and deletion request flows. Confirm no normal message text appears in logs or database queries.
 
 ## Payments
@@ -25,7 +25,7 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 ## Spike and soak
 
 - Run `k6 run -e STAGING_API_URL=https://.../api/v1 load/staging-spike.js` from approved infrastructure. The default public-edge spike requires p95 <500 ms, p99 <1 s and <1% failures.
-- Run `STAGING_API_URL=https://.../api/v1 STAGING_WEB_ORIGIN=https://... REALTIME_PAIRS=10 REALTIME_CONCURRENCY=2 node load/staging-realtime.mjs` from approved distributed runners. It uses disposable signed identities and measures match, WebSocket upgrade, relay, reconnect and cleanup paths. Each runner is deliberately capped at 50 pairs and concurrency 10; respect production abuse limits instead of adding a hidden bypass.
+- Run `STAGING_API_URL=https://.../api/v1 STAGING_WEB_ORIGIN=https://... REALTIME_PAIRS=10 REALTIME_CONCURRENCY=2 RELEASE_REVISION=<full-sha> REALTIME_REPORT_PATH=<new-report.json> node load/staging-realtime.mjs` from approved distributed runners. It uses disposable signed identities and measures match, WebSocket upgrade, relay, reconnect and cleanup paths. Each runner is deliberately capped at 50 pairs and concurrency 10; respect production abuse limits instead of adding a hidden bypass. Successful runs refuse to overwrite an existing report.
 - Confirm queues/active claims return to zero and no chat payload persisted. Record the test ID, revision, region mix, peak VUs, results and cleanup evidence.
 
 ## Launch and rollback
