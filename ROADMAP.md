@@ -1859,6 +1859,7 @@ Repository launch tooling completed:
 - [x] Phase 24 evidence schema and fail-closed validator
 - [x] fail-closed INR 50 live payment/refund and idempotency evidence invariants
 - [x] fail-closed ad review, layout, tier, fallback and kill-switch evidence matrix
+- [x] fail-closed two-browser staging flow and no-transcript evidence matrix
 - [x] clean-checkout evidence draft generator that preserves external placeholders
 
 External completion evidence still pending:

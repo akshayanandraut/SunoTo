@@ -22,6 +22,12 @@ export function validateLaunchEvidence(value={},options={}){
   if(!reference(value.staging?.smokeReportPath))errors.push("staging smoke report path is missing");
   if(!sha256(value.staging?.smokeReportSha256))errors.push("staging smoke report SHA-256 is missing");
   timestamp(errors,value.staging?.smokePassedAt,"staging smoke",now);
+  if(!reference(value.staging?.browserFlowReference))errors.push("staging browser-flow evidence reference is missing");
+  timestamp(errors,value.staging?.browserFlowVerifiedAt,"staging browser-flow verification",now);
+  const browsers=Array.isArray(value.staging?.browsersTested)?new Set(value.staging.browsersTested.filter(reference).map(value=>value.trim().toLowerCase())) : new Set();
+  if(browsers.size<2)errors.push("staging browser flow requires two distinct browsers");
+  const stagingChecks=["matchVerified","oneActiveIdentityVerified","reconnectVerified","idleVerified","reportBlockVerified","virtualDisclosureVerified","dataExportVerified","deletionRequestVerified","noTranscriptPersistenceVerified"];
+  if(stagingChecks.some(key=>value.staging?.[key]!==true))errors.push("staging browser-flow acceptance matrix is incomplete");
 
   const payment=value.payment||{};
   for(const key of ["liveOrderReference","livePaymentReference","refundReference","ledgerReference"])if(!reference(payment[key]))errors.push(`payment.${key} is missing`);

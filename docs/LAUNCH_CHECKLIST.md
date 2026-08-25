@@ -9,6 +9,7 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 - Run `STAGING_API_URL=https://.../api/v1 STAGING_WEB_ORIGIN=https://... RELEASE_REVISION=<full-sha> SMOKE_REPORT_PATH=<new-report.json> node scripts/staging-smoke.mjs` and attach the immutable report to the release record. The command refuses to overwrite an existing report.
 - The smoke command prints the report SHA-256 after writing it. Record that value beside the immutable report reference; independently recheck it with `node scripts/fingerprint-launch-report.mjs <report.json> <full-sha> staging-smoke` before approval.
 - Test two real browsers through match, reconnect, idle, report/block, virtual disclosure, data export and deletion request flows. Confirm no normal message text appears in logs or database queries.
+- Record the two distinct browsers, a manual-flow evidence reference and timestamp, and explicit pass flags for match, one active identity, reconnect, idle, report/block, virtual disclosure, data export, deletion request and no transcript persistence.
 
 ## Payments
 
@@ -42,6 +43,7 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 ## Evidence required to check Phase 24
 
 - Staging URL and smoke-test timestamp/commit.
+- Two-browser manual-flow reference, browser list, timestamp and complete acceptance matrix.
 - Immutable frontend/Worker versions, applied migration version, backup reference and restore-drill timestamp.
 - Staging smoke report reference and SHA-256 fingerprint in addition to its URL and timestamp.
 - Successful controlled live INR 50 payment and full-refund provider references, captured/processed state, equal credit/reversal quantities, duplicate-webhook confirmation and a ledger reconciliation reference.
