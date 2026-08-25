@@ -23,9 +23,16 @@ export function validateLaunchEvidence(value={},options={}){
   if(!sha256(value.staging?.smokeReportSha256))errors.push("staging smoke report SHA-256 is missing");
   timestamp(errors,value.staging?.smokePassedAt,"staging smoke",now);
 
-  for(const key of ["liveOrderReference","livePaymentReference","refundReference","ledgerReference"])if(!reference(value.payment?.[key]))errors.push(`payment.${key} is missing`);
-  if(value.payment?.ledgerReconciled!==true)errors.push("live payment/refund ledger reconciliation is not confirmed");
-  timestamp(errors,value.payment?.reconciledAt,"payment reconciliation",now);
+  const payment=value.payment||{};
+  for(const key of ["liveOrderReference","livePaymentReference","refundReference","ledgerReference"])if(!reference(payment[key]))errors.push(`payment.${key} is missing`);
+  if(payment.amountPaise!==5000||payment.currency!=="INR")errors.push("live payment must be exactly 5000 paise in INR");
+  if(payment.paymentCaptured!==true)errors.push("live payment capture is not confirmed");
+  if(payment.refundAmountPaise!==5000||payment.refundProcessed!==true)errors.push("full live refund is not confirmed");
+  if(!Number.isSafeInteger(payment.creditedCredits)||payment.creditedCredits<=0)errors.push("credited Credits are missing");
+  if(payment.reversedCredits!==payment.creditedCredits)errors.push("refund Credits do not fully reverse the payment credit");
+  if(payment.duplicateWebhookIdempotent!==true)errors.push("duplicate payment webhook idempotency is not confirmed");
+  if(payment.ledgerReconciled!==true)errors.push("live payment/refund ledger reconciliation is not confirmed");
+  timestamp(errors,payment.reconciledAt,"payment reconciliation",now);
 
   if(placeholder(value.advertising?.provider)||["house","disabled"].includes(String(value.advertising?.provider||"").toLowerCase()))errors.push("a reviewed production ad provider is missing");
   if(!reference(value.advertising?.reviewReference))errors.push("advertising provider review reference is missing");
