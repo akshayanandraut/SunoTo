@@ -5,7 +5,7 @@ import { RateLimitShard } from "../worker/src/durable/RateLimitShard.js";
 import { ChatSession } from "../worker/src/durable/ChatSession.js";
 import { AccountPrivacyService } from "../worker/src/services/AccountPrivacyService.js";
 import { AdminService } from "../worker/src/services/AdminService.js";
-import { allowedOrigin,secureResponse } from "../worker/src/index.js";
+import worker,{ allowedOrigin,secureResponse } from "../worker/src/index.js";
 
 function rateState(){const values=new Map();return{storage:{get:key=>values.get(key),put:(key,value)=>values.set(key,structuredClone(value)),list:({prefix})=>new Map([...values].filter(([key])=>key.startsWith(prefix))),delete:keys=>keys.forEach(key=>values.delete(key)),setAlarm:()=>{}},values};}
 function socket(id){return{sent:[],send(value){this.sent.push(JSON.parse(value))},deserializeAttachment(){return{participantId:id,resumeToken:`token-${id}`}}};}
@@ -19,6 +19,7 @@ describe("HTTP security boundary",()=>{
   it("allows configured and same-site origins while rejecting unknown origins",()=>{assert.equal(allowedOrigin(new Request("https://api.example.test/x",{headers:{origin:"https://web.example.test"}}),{ALLOWED_ORIGIN:"https://web.example.test"}),"https://web.example.test");assert.equal(allowedOrigin(new Request("https://api.example.test/x",{headers:{origin:"https://api.example.test"}}),{}),"https://api.example.test");assert.equal(allowedOrigin(new Request("https://api.example.test/x",{headers:{origin:"https://evil.example"}}),{}),false);assert.equal(allowedOrigin(new Request("https://api.example.test/x",{headers:{origin:"http://127.0.0.1:5173"}}),{ALLOWED_ORIGIN:"https://web.example.test"}),false);assert.equal(allowedOrigin(new Request("http://127.0.0.1:8787/x",{headers:{origin:"http://127.0.0.1:5173"}}),{ALLOWED_ORIGIN:"http://127.0.0.1:5173"}),"http://127.0.0.1:5173");});
   it("adds browser defenses and disables caching for private APIs",()=>{const request=new Request("https://api.example.test/api/v1/me/profile",{headers:{origin:"https://web.example.test"}}),response=secureResponse(Response.json({ok:true}),request,{ALLOWED_ORIGIN:"https://web.example.test"});assert.equal(response.headers.get("access-control-allow-origin"),"https://web.example.test");assert.equal(response.headers.get("x-content-type-options"),"nosniff");assert.equal(response.headers.get("x-frame-options"),"DENY");assert.equal(response.headers.get("cache-control"),"no-store");});
   it("keeps first-party geolocation available for explicit radius matching",async()=>{const headers=await readFile(new URL("../web/public/_headers",import.meta.url),"utf8");assert.match(headers,/Permissions-Policy: camera=\(\), microphone=\(\), geolocation=\(self\)/);assert.doesNotMatch(headers,/geolocation=\(\)/);});
+  it("rejects oversized chunked JSON before routing or buffering the full API body",async()=>{const body=new ReadableStream({start(controller){controller.enqueue(new Uint8Array(64*1024));controller.enqueue(new Uint8Array(1));controller.close();}}),request=new Request("https://api.example.test/api/v1/match/search",{method:"POST",headers:{"content-type":"application/json"},body,duplex:"half"}),response=await worker.fetch(request,{});assert.equal(response.status,413);assert.deepEqual(await response.json(),{error:"payload_too_large"});});
 });
 
 describe("privacy operations",()=>{
