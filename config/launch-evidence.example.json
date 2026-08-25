@@ -1,8 +1,8 @@
 {
   "revision": "replace-with-40-character-release-commit",
   "staging": {"webUrl": "https://replace.invalid", "apiUrl": "https://replace.invalid/api/v1", "smokePassedAt": "replace-with-iso-timestamp"},
-  "payment": {"liveOrderReference": "replace", "livePaymentReference": "replace", "refundReference": "replace", "ledgerReconciled": false},
+  "payment": {"liveOrderReference": "replace", "livePaymentReference": "replace", "refundReference": "replace", "ledgerReconciled": false, "reconciledAt": "replace-with-iso-timestamp"},
   "advertising": {"provider": "replace", "tiersVerifiedAt": "replace-with-iso-timestamp", "killSwitchVerified": false},
-  "load": {"reportReference": "replace", "peakVirtualUsers": 0, "p95Milliseconds": 0, "p99Milliseconds": 0, "failureRate": 1, "queuesClean": false, "noTranscriptPersistenceVerified": false},
-  "reddit": {"postUrl": "https://replace.invalid", "monitoringOwner": "replace"}
+  "load": {"reportReference": "replace", "peakVirtualUsers": 0, "p95Milliseconds": 0, "p99Milliseconds": 0, "failureRate": 1, "queuesClean": false, "noTranscriptPersistenceVerified": false, "completedAt": "replace-with-iso-timestamp"},
+  "reddit": {"postUrl": "https://replace.invalid", "monitoringOwner": "replace", "postedAt": "replace-with-iso-timestamp"}
 }

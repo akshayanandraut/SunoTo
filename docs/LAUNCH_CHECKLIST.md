@@ -42,3 +42,5 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 - Approved ad provider and tier/kill-switch verification.
 - Spike/soak report with cleanup evidence.
 - Reddit post URL and moderation/feedback monitoring owner.
+
+Validate the completed record against the exact release commit with `node scripts/validate-launch-evidence.mjs path/to/evidence.json <40-character-release-sha>`. The command fails if the record names another revision or uses missing/future completion timestamps.
