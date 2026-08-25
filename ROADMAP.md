@@ -1858,6 +1858,7 @@ Repository launch tooling completed:
 - [x] clean tracked Git checkout verification before either deployment
 - [x] Phase 24 evidence schema and fail-closed validator
 - [x] fail-closed INR 50 live payment/refund and idempotency evidence invariants
+- [x] fail-closed ad review, layout, tier, fallback and kill-switch evidence matrix
 - [x] clean-checkout evidence draft generator that preserves external placeholders
 
 External completion evidence still pending:

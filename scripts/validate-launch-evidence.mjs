@@ -34,10 +34,12 @@ export function validateLaunchEvidence(value={},options={}){
   if(payment.ledgerReconciled!==true)errors.push("live payment/refund ledger reconciliation is not confirmed");
   timestamp(errors,payment.reconciledAt,"payment reconciliation",now);
 
-  if(placeholder(value.advertising?.provider)||["house","disabled"].includes(String(value.advertising?.provider||"").toLowerCase()))errors.push("a reviewed production ad provider is missing");
-  if(!reference(value.advertising?.reviewReference))errors.push("advertising provider review reference is missing");
-  timestamp(errors,value.advertising?.tiersVerifiedAt,"advertising verification",now);
-  if(value.advertising?.killSwitchVerified!==true)errors.push("ad tiers and kill switch are not verified");
+  const advertising=value.advertising||{};
+  if(placeholder(advertising.provider)||["house","disabled"].includes(String(advertising.provider||"").toLowerCase()))errors.push("a reviewed production ad provider is missing");
+  if(!reference(advertising.reviewReference))errors.push("advertising provider review reference is missing");
+  timestamp(errors,advertising.tiersVerifiedAt,"advertising verification",now);
+  const advertisingChecks=["policyReviewed","privacyReviewed","consentReviewed","cspReviewed","providerFailureFallbackVerified","mobilePlacementVerified","desktopPlacementVerified","freeTierVerified","midTierVerified","adFreeTierVerified","interstitialCadenceVerified","killSwitchVerified"];
+  if(advertisingChecks.some(key=>advertising[key]!==true))errors.push("advertising review, placement, tier, fallback or kill-switch evidence is incomplete");
 
   const load=value.load||{};
   if(!reference(load.reportReference)||!(load.peakVirtualUsers>0))errors.push("load report and peak virtual users are missing");

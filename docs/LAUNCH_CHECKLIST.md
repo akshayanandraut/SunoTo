@@ -23,6 +23,7 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 - Register the reviewed adapter through `registerAdProvider`. Adapter failures must remove their slot rather than break matching/chat UI. Update and review CSP domains before enabling it.
 - Validate mobile layout, desktop side placement, every-fifth-scan interstitial, 1–1,000 Credit no-interstitial tier, above-1,000 Credit ad-free tier and global kill switch.
 - Keep ads disabled if the provider, consent model or content categories are unresolved.
+- Record policy, privacy, consent and CSP review; provider-failure fallback; mobile/desktop placement; all three Credit tiers; every-fifth-scan interstitial cadence; and the global kill switch. Every flag must be true before the launch evidence gate passes.
 
 ## Spike and soak
 
