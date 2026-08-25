@@ -34,6 +34,8 @@ Run `pnpm production:build` with the intended production environment. It validat
 
 The production build also writes `dist/release.json` with the exact `RELEASE_REVISION`. Serve it with `Cache-Control: no-store`; the staging smoke gate compares this manifest and the Worker health revision to the same full Git SHA so a mixed release cannot pass.
 
+Deploy Pages only with `RELEASE_REVISION=<full-sha> CLOUDFLARE_PAGES_PROJECT=<name> PAGES_BRANCH=<branch> npm run frontend:deploy`. The command rebuilds the production artifact, refuses to upload when `dist/release.json` names another revision, and binds the Pages deployment metadata to the same SHA.
+
 ## Data rights, retention and grievances
 
 - Test account export and deletion requests with an ordinary verified account.
