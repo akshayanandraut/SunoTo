@@ -9,6 +9,8 @@ export class AdminService{
   restrictions(){return this.request("/restrictions?select=target_ref,status,reason,active,updated_at&order=updated_at.desc&limit=100")}
   grievances(){return this.request("/grievances?select=id,email,category,description,status,received_at,acknowledged_at,resolved_at&order=received_at.desc&limit=100")}
   updateGrievance({adminId,id,status}){return this.rpc("admin_update_grievance",{admin_id:adminId,target_id:id,new_status:status})}
+  feedback(){return this.request("/feedback?select=id,account_user_id,message,status,created_at&order=created_at.desc&limit=100")}
+  updateFeedback({adminId,id,status}){return this.rpc("admin_update_feedback",{admin_id:adminId,target_id:id,new_status:status})}
   deletions(){return this.request("/account_deletion_requests?select=id,user_id,reason,status,processing_note,requested_at,completed_at&order=requested_at.desc&limit=100")}
   updateDeletion({adminId,id,status,note}){return this.rpc("admin_update_deletion_request",{admin_id:adminId,target_id:id,new_status:status,decision_note:note})}
   promotions(type){const table=type==="coupon"?"coupons":"offers";return this.request(`/${table}?select=*&order=created_at.desc&limit=100`)}

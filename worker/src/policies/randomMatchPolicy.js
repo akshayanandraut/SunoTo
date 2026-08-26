@@ -1,5 +1,6 @@
 export function isEligibleRandomPair(seeker,candidate,active={}){
   if(!seeker||!candidate||seeker.identityId===candidate.identityId)return false;
+  if((seeker.mode||"text")!==(candidate.mode||"text"))return false;
   if(seeker.accountUserId&&seeker.accountUserId===candidate.accountUserId)return false;
   if(seeker.accountPublicId&&seeker.accountPublicId===candidate.accountPublicId)return false;
   if(active[seeker.identityId]||active[candidate.identityId])return false;

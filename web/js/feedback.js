@@ -1,0 +1,4 @@
+import { authConfigured,currentSession } from "./auth.js";
+const base=import.meta.env.VITE_API_BASE_URL||"http://127.0.0.1:8787/api/v1",form=document.querySelector("#feedback-form"),result=document.querySelector("#result");
+async function json(response){const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"Request failed");return data}
+form.addEventListener("submit",async event=>{event.preventDefault();result.hidden=false;result.textContent="Sending…";const values=new FormData(form);try{const session=authConfigured?await currentSession():null,data=await json(await fetch(`${base}/feedback`,{method:"POST",headers:{"content-type":"application/json",...(session?{authorization:`Bearer ${session.access_token}`}:{})},body:JSON.stringify(Object.fromEntries(values))}));result.textContent=`Thanks! Reference: ${data.reference}`;form.reset();}catch(error){result.textContent=error.message;}});

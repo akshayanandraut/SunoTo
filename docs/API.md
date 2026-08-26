@@ -6,7 +6,7 @@
 
 ## Matchmaking
 
-- `POST /api/v1/match/search` with optional `profile`, `preferences` and browser-local `blockedPeerIds` fields
+- `POST /api/v1/match/search` with optional `profile`, `preferences`, browser-local `blockedPeerIds` fields and an optional `mode` (`"text"` default or `"video"`)
 - `GET /api/v1/match/result`
 - `POST /api/v1/match/cancel`
 - `POST /api/v1/match/end` with `{ "sessionId": "opaque-session" }`
@@ -89,5 +89,15 @@ Money, match, session, reconnect, safety and virtual events are recorded only by
 - `POST /api/v1/grievances` accepts a validated email, category and 20–2,000 character description. It returns a reference ID and is rate-limited.
 - Admin-only `GET /api/v1/admin/grievances` and `POST /api/v1/admin/grievances/:id` operate the audited grievance queue.
 - Admin-only `GET /api/v1/admin/deletions` and `POST /api/v1/admin/deletions/:id` operate a locked, audited deletion queue. A transition requires a substantive processing note; completion must only be recorded after the runbook process is actually performed.
+- `POST /api/v1/feedback` accepts a 10–2,000 character suggestion, optionally linked to the caller's account if a bearer token is supplied. It returns a reference ID and is rate-limited.
+- Admin-only `GET /api/v1/admin/feedback` and `POST /api/v1/admin/feedback/:id` operate the audited feedback queue.
+
+## Real-user video beta
+
+Video chat is a separate matching mode from text chat, mirroring Omegle's distinct "Text chat" and "Video chat" entry points: a searcher picks `mode: "video"` up front in `POST /api/v1/match/search`, and the matchmaking pool is partitioned by mode at the lowest eligibility-check level (`isEligibleRandomPair`), so a text-mode seeker can never be paired with a video-mode seeker or vice versa.
+
+Video mode is a limited beta, gated by the `video` server config (`enabled` + a `betaUserIds` allowlist of Supabase Auth UUIDs, managed only through `GET/PUT /api/v1/admin/video`). Eligibility is enforced at search time — a `mode: "video"` request is rejected with `video_beta_not_available` (403) unless the caller is a verified account on the allowlist — before the seeker is ever queued. A queued video-mode seeker also never receives a virtual/bot fallback match, regardless of wait time.
+
+The matched `mode` propagates from the matchmaking claim through `/authorize-session` into the `ChatSession` Durable Object. Video-eligibility (both participants real, authenticated, allow-listed) is only computed for sessions whose `mode` is `"video"`; a random text-mode match between two beta users never surfaces video signaling. Eligible sessions receive a per-participant `VIDEO_ELIGIBLE` WebSocket event carrying a deterministic `initiator` flag so exactly one side starts the WebRTC offer automatically. Call setup then flows entirely peer-to-peer over WebRTC, with the Durable Object relaying only `VIDEO_OFFER`, `VIDEO_ANSWER`, `VIDEO_ICE_CANDIDATE` and `VIDEO_END` signaling messages on the existing chat socket.
 
 API responses use exact-origin CORS and private routes default to `Cache-Control: no-store`. Unknown browser origins are rejected. WebSocket upgrades preserve their native response rather than being reconstructed by the HTTP header wrapper.

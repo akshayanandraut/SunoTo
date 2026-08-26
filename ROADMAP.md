@@ -1957,8 +1957,8 @@ Ops:
 Coming Soon UI:
 
 - free-text interests
-- video chat
-- random video
+- video chat (built ahead of schedule as a real-users-only, beta-allowlisted feature — see §video-beta below; still not a general MVP launch)
+- random video (still not implemented — video is 1:1 signaling within an existing matched session only, never a separate random-video pairing, and never with a virtual participant)
 - chat rooms
 - direct 1-to-1 chat
 
