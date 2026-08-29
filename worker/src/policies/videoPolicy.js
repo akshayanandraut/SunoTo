@@ -4,7 +4,8 @@ export function normalizeVideoConfig(value={}){
   const betaUserIds=(Array.isArray(value.betaUserIds)?value.betaUserIds:[]).map(String).filter(id=>UUID.test(id)).slice(0,1000);
   return{enabled:value.enabled===true,betaUserIds:[...new Set(betaUserIds)]};
 }
+export const VIDEO_FREE_SESSION_LIMIT=5;
 export function videoEligible(config,leftAccountUserId,rightAccountUserId,leftVirtual,rightVirtual){
-  if(!config.enabled||leftVirtual||rightVirtual||!leftAccountUserId||!rightAccountUserId)return false;
-  return config.betaUserIds.includes(leftAccountUserId)&&config.betaUserIds.includes(rightAccountUserId);
+  return Boolean(config.enabled&&!leftVirtual&&!rightVirtual&&leftAccountUserId&&rightAccountUserId);
 }
+export function hasUnlimitedVideoSessions(config,accountUserId){return config.betaUserIds.includes(accountUserId);}

@@ -15,7 +15,7 @@ export class AnonymousIdentityShard{
       return Response.json({token,identityId:body.anonymousId,trial:trialEligibility(identity.successfulConnections),riskLevel:risk.riskLevel});
     }
     if(request.method==="POST"&&url.pathname==="/authorize-search"){
-      const body=await request.json(),identity=data.identities[body.identityId];if(!identity)return Response.json({error:"unknown_identity"},{status:401});const trial=trialEligibility(identity.successfulConnections);return Response.json(trial,{status:trial.accountRequired&&!body.registered?403:200});
+      const body=await request.json(),identity=data.identities[body.identityId];if(!identity)return Response.json({error:"unknown_identity"},{status:401});const trial=trialEligibility(identity.successfulConnections),blocked=trial.accountRequired&&!body.registered;return Response.json(blocked?{...trial,error:"account_required"}:trial,{status:blocked?403:200});
     }
     if(request.method==="POST"&&url.pathname==="/consume"){
       const body=await request.json(),identity=data.identities[body.identityId],key=`${body.sessionId}:${body.identityId}`;if(!identity)return Response.json({error:"unknown_identity"},{status:404});if(data.consumptions[key])return Response.json({...trialEligibility(identity.successfulConnections),consumed:false,idempotent:true});

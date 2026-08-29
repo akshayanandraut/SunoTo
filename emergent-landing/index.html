@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SunoTo — Meet someone new, right now</title>
+    <meta name="description" content="Anonymous text-first chat and social audio platform. Match instantly, talk for 2 minutes, and discover independent Indian music together.">
+    <!-- Typography -->
+    <link rel="preconnect" href="https://googleapis.com">
+    <link rel="preconnect" href="https://gstatic.com" crossorigin>
+    <link href="https://googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Navigation Banner & Install Nudge -->
+<header class="site-header">
+    <div class="container header-container">
+        <div class="logo" data-route="account" role="button" tabindex="0">
+            SunoTo<span class="logo-dot">.</span>
+        </div>
+
+        <!-- PWA Install Nudge (Initially hidden via hidden attribute, managed by JS) -->
+        <div id="pwa-banner" class="pwa-nudge" hidden>
+            <span class="pwa-text">Add to Home Screen for instant matching</span>
+            <button id="install-pwa" class="btn btn-sm btn-green">Install</button>
+        </div>
+
+        <button class="btn btn-sm btn-outline" data-route="account">Sign In</button>
+    </div>
+</header>
+
+<main>
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="container hero-container">
+            <div class="hero-content">
+                <div class="badge-live">
+                    <span class="pulse-dot"></span>
+                    <span id="live-counter">14,240 real connections today</span>
+                </div>
+                <h1>Meet someone new, right now</h1>
+                <p class="hero-lead">No profiles. No judgements. Just pure, anonymous text chat to start with. First few chats are completely free, no account needed. Must be 18 or older.</p>
+
+                <div class="hero-actions">
+                    <button class="btn btn-lg btn-brand" data-route="onboarding">Start Random Chat</button>
+                    <button class="btn btn-lg btn-outline" data-route="party">Tune into Radio</button>
+                </div>
+            </div>
+
+            <!-- Phone Mockup App Visual -->
+            <div class="hero-visual">
+                <div class="phone-mockup">
+                    <div class="phone-header">
+                        <div class="phone-user">
+                            <div class="avatar-placeholder"></div>
+                            <div class="user-info">
+                                <span class="user-name">Stranger #842</span>
+                                <span class="user-status">Typing...</span>
+                            </div>
+                        </div>
+                        <div class="match-timer">01:42</div>
+                    </div>
+
+                    <div class="phone-chat-body">
+                        <div class="chat-bubble received">
+                            Hey! What are you listening to right now?
+                        </div>
+                        <div class="chat-bubble sent">
+                            That new indie track on Public Radio here. It's beautiful.
+                        </div>
+                        <div class="chat-bubble received">
+                            Oh wait, let me tune in too! Loop it?
+                        </div>
+                        <div class="chat-system-notice">
+                            Remaining time: 18 seconds. Tap continue to lock connection.
+                        </div>
+                    </div>
+
+                    <div class="phone-footer">
+                        <div class="mock-input">Type a friendly message...</div>
+                        <div class="mock-send-btn"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="steps-section">
+        <div class="container">
+            <h2 class="section-title text-center">How it works</h2>
+            <div class="steps-grid">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <h3>Tell us the basics</h3>
+                    <p>Select your language preferences and topics of interest. No names, no social handles, and no profile pictures required.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <h3>We match you</h3>
+                    <p>Our algorithm safely connects you with someone looking to talk about the same things right now in a safe environment.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <h3>Talk for 2 minutes</h3>
+                    <p>Have an unfiltered two-minute chat. If both of you tap continue before time runs out, the chat locks in and stays open.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Core Social Audio Features -->
+    <section class="features-section">
+        <div class="container">
+            <div class="features-header">
+                <h2 class="section-title">Beyond 1:1 chat</h2>
+                <p class="section-subtitle">When you want to step back from conversations and just soak in the vibe with the community.</p>
+            </div>
+
+            <div class="features-grid">
+                <!-- Feature 1: SunoTo Radio -->
+                <div class="feature-card">
+                    <div class="feature-icon bg-mint">📻</div>
+                    <h3>SunoTo Radio</h3>
+                    <p>Our own professionally curated, always-on featured music channel. Zero setup, zero subscription barriers. Just tune in, discover incredible local independent artists, and experience audio together with thousands of active listeners.</p>
+                    <button class="btn btn-sm btn-outline card-action" data-route="party">Tune in now</button>
+                </div>
+
+                <!-- Feature 2: Public Radio -->
+                <div class="feature-card">
+                    <div class="feature-icon bg-yellow">🎧</div>
+                    <h3>Public Radio</h3>
+                    <p>A democratic stream completely fueled by the community. Submit your favourite independent tracks, vote to skip, or request a replay in real time. Discover fresh, grass-roots music creators before they hit the charts.</p>
+                    <button class="btn btn-sm btn-outline card-action" data-route="party">Browse tracks</button>
+                </div>
+
+                <!-- Feature 3: Party Rooms -->
+                <div class="feature-card">
+                    <div class="feature-icon bg-mint">✨</div>
+                    <h3>Party Rooms</h3>
+                    <p>Take charge of the audio space. Host your own private audio, video, or group music room within seconds. Generate a secure entry code, invite your friends, and share clean audio streams with low latency.</p>
+                    <button class="btn btn-sm btn-outline card-action" data-route="onboarding">Create room</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trust & Safety Strip -->
+    <section class="safety-strip">
+        <div class="container safety-container">
+            <div class="safety-item">
+                <span class="safety-tag">18+</span>
+                <span>Strictly enforced safety guidelines for adults</span>
+            </div>
+            <div class="safety-item">
+                <span class="safety-tag">Secret</span>
+                <span>Anonymous by design with no background tracking</span>
+            </div>
+            <div class="safety-item">
+                <span class="safety-tag">Local</span>
+                <span>All text messages stay encrypted on-device</span>
+            </div>
+            <div class="safety-item">
+                <span class="safety-tag">India First</span>
+                <span>Optimized for low-bandwidth mobile networks</span>
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- Footer -->
+<footer class="site-footer">
+    <div class="container footer-container">
+        <div class="footer-brand">
+            <span class="logo">SunoTo<span class="logo-dot">.</span></span>
+            <p>A space for real, spontaneous human conversations across India.</p>
+        </div>
+        <nav class="footer-links" aria-label="Footer Navigation">
+            <a href="#privacy" data-route="account">Privacy Policy</a>
+            <a href="#terms" data-route="account">Terms of Service</a>
+            <a href="#guidelines" data-route="account">Community Guidelines</a>
+            <a href="#feedback" data-route="account">Send Feedback</a>
+        </nav>
+    </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>

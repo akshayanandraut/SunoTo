@@ -38,5 +38,5 @@ create or replace function public.admin_analytics_snapshot(result_days integer d
 returns table(event_day date,event_name text,dimension text,event_count bigint,value_total bigint)
 language sql security definer set search_path='' as $$select a.event_day,a.event_name,a.dimension,a.event_count,a.value_total from public.analytics_daily a where a.event_day>=((now() at time zone 'Asia/Kolkata')::date-least(greatest(result_days,1),365)+1) order by a.event_day desc,a.event_name,a.dimension;$$;
 
-revoke all on function public.record_analytics_event(text,text,text,bigint,timestamptz),function public.public_analytics_snapshot(),function public.admin_analytics_snapshot(integer) from public,anon,authenticated;
-grant execute on function public.record_analytics_event(text,text,text,bigint,timestamptz),function public.public_analytics_snapshot(),function public.admin_analytics_snapshot(integer) to service_role;
+revoke all on function public.record_analytics_event(text,text,text,bigint,timestamptz),public.public_analytics_snapshot(),public.admin_analytics_snapshot(integer) from public,anon,authenticated;
+grant execute on function public.record_analytics_event(text,text,text,bigint,timestamptz),public.public_analytics_snapshot(),public.admin_analytics_snapshot(integer) to service_role;

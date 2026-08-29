@@ -1,4 +1,4 @@
-# Random Chat India
+# SunoTo
 
 Mobile-first anonymous text chat for India. The project uses vanilla HTML, CSS and ES modules on the frontend, Cloudflare Workers/Durable Objects for realtime coordination, and Supabase Auth/Postgres for persistent account and business data.
 

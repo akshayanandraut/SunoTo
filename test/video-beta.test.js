@@ -11,7 +11,8 @@ describe("video beta configuration",()=>{
 
 describe("video eligibility",()=>{
   const enabled=normalizeVideoConfig({enabled:true,betaUserIds:["11111111-1111-1111-1111-111111111111","22222222-2222-2222-2222-222222222222"]});
-  it("requires both real participants to be on the beta allowlist",()=>{assert.equal(videoEligible(enabled,"11111111-1111-1111-1111-111111111111","22222222-2222-2222-2222-222222222222",false,false),true);assert.equal(videoEligible(enabled,"11111111-1111-1111-1111-111111111111","33333333-3333-3333-3333-333333333333",false,false),false);});
+  it("allows any two real verified accounts once enabled, beta allowlist no longer required",()=>{assert.equal(videoEligible(enabled,"11111111-1111-1111-1111-111111111111","22222222-2222-2222-2222-222222222222",false,false),true);assert.equal(videoEligible(enabled,"11111111-1111-1111-1111-111111111111","33333333-3333-3333-3333-333333333333",false,false),true);});
+  it("still requires both participants to have an account",()=>{assert.equal(videoEligible(enabled,"11111111-1111-1111-1111-111111111111",null,false,false),false);});
   it("never allows video for a virtual participant even if beta-listed",()=>{assert.equal(videoEligible(enabled,"11111111-1111-1111-1111-111111111111","22222222-2222-2222-2222-222222222222",true,false),false);});
   it("stays off entirely while the feature is disabled",()=>{const disabled=normalizeVideoConfig({enabled:false,betaUserIds:enabled.betaUserIds});assert.equal(videoEligible(disabled,"11111111-1111-1111-1111-111111111111","22222222-2222-2222-2222-222222222222",false,false),false);});
 });

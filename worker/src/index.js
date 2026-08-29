@@ -1,4 +1,7 @@
 import { ChatSession } from "./durable/ChatSession.js";
+import { PartyRoomShard } from "./durable/PartyRoomShard.js";
+import { ListenerRegistryShard } from "./durable/ListenerRegistryShard.js";
+import { validRoomTypeId, validPriceTierId, HOST_INACTIVITY_TIMEOUT_SECONDS } from "./policies/partyRoomPolicy.js";
 import { MatchmakingShard } from "./durable/MatchmakingShard.js";
 import { PresenceShard } from "./durable/PresenceShard.js";
 import { AnonymousIdentityShard } from "./durable/AnonymousIdentityShard.js";
@@ -6,8 +9,10 @@ import { ipPrefix,keyedFingerprint,verifyAnonymousToken } from "./auth/anonymous
 import { verifySupabaseUser,supabaseRest } from "./auth/supabaseUser.js";
 import { DeviceOwnershipShard } from "./durable/DeviceOwnershipShard.js";
 import { validUsername } from "./policies/usernamePolicy.js";
+import { validPatternId, validPaletteId } from "./policies/themePolicy.js";
 import { PaymentService } from "./services/PaymentService.js";
 import { hasPaidPreferences,normalizePaidPreferences } from "./policies/preferencePolicy.js";
+import { VIDEO_FREE_SESSION_LIMIT,hasUnlimitedVideoSessions } from "./policies/videoPolicy.js";
 import { ConfigService } from "./services/ConfigService.js";
 import { DEFAULT_AD_CONFIG } from "./policies/adPolicy.js";
 import { DEFAULT_FLAGS } from "./policies/flagPolicy.js";
@@ -18,8 +23,27 @@ import { AccountPrivacyService } from "./services/AccountPrivacyService.js";
 import { FeedbackService } from "./services/FeedbackService.js";
 import { RateLimitShard } from "./durable/RateLimitShard.js";
 import { DailyAccessService } from "./services/DailyAccessService.js";
+import { RadioService } from "./services/RadioService.js";
+import { StreamingMembershipService } from "./services/StreamingMembershipService.js";
+import { VerificationService } from "./services/VerificationService.js";
+import { GamesService } from "./services/GamesService.js";
 
 const MAX_API_BODY_BYTES=64*1024,MAX_WEBHOOK_BODY_BYTES=256*1024;
+function bytesStartWith(bytes,pattern,offset=0){return pattern.every((byte,index)=>bytes[offset+index]===byte);}
+function looksLikeAudio(bytes){
+  if(bytesStartWith(bytes,[0x49,0x44,0x33]))return"mp3";
+  if(bytesStartWith(bytes,[0xFF,0xFB])||bytesStartWith(bytes,[0xFF,0xF3])||bytesStartWith(bytes,[0xFF,0xF2]))return"mp3";
+  if(bytesStartWith(bytes,[0x52,0x49,0x46,0x46])&&bytesStartWith(bytes,[0x57,0x41,0x56,0x45],8))return"wav";
+  if(bytesStartWith(bytes,[0x4F,0x67,0x67,0x53]))return"ogg";
+  if(bytesStartWith(bytes,[0x66,0x74,0x79,0x70],4))return"m4a";
+  return null;
+}
+function looksLikeImage(bytes){
+  if(bytesStartWith(bytes,[0xFF,0xD8,0xFF]))return"jpg";
+  if(bytesStartWith(bytes,[0x89,0x50,0x4E,0x47]))return"png";
+  if(bytesStartWith(bytes,[0x52,0x49,0x46,0x46])&&bytesStartWith(bytes,[0x57,0x45,0x42,0x50],8))return"webp";
+  return null;
+}
 function shard(env,binding,name="global"){const namespace=env[binding];return namespace.get(namespace.idFromName(name));}
 function bearer(request){const value=request.headers.get("authorization")||"";return value.startsWith("Bearer ")?value.slice(7):null}
 function webSocketToken(request){return(request.headers.get("sec-websocket-protocol")||"").split(",").map(value=>value.trim()).find(value=>value.startsWith("rc-auth."))?.slice(8)||null}
@@ -31,7 +55,7 @@ async function endMatches(env,targetRef){if(!env?.MATCHMAKING)return null;const 
 export async function activateRequiredDailyAccess({eligibility,user,env,fetcher=env.FETCHER||fetch}){if(!eligibility?.accountRequired)return null;if(!user?.emailVerified)throw new Error("verified_account_required");return new DailyAccessService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher}).activate({userId:user.id});}
 async function proxyJson(request,env,path,{authorizeSearch=false,activity}={}){
   const claims=await anonymousClaims(request,env);if(!claims)return Response.json({error:"invalid_anonymous_session"},{status:401});if(authorizeSearch){const limited=await enforceRateLimit(request,env,"search",claims.sub);if(limited)return limited;}const anon=await anonymousStub(env),body=await request.json();
-  if(authorizeSearch){const flagsBlocked=await requireFlags(env,["new_matches_enabled"]);if(flagsBlocked)return flagsBlocked;body.mode=body.mode==="video"?"video":"text";try{const preferences=normalizePaidPreferences(body.preferences||{});body.preferences=preferences;if(hasPaidPreferences(preferences)){const preferenceBlocked=await requireFlags(env,preferences.radiusKm!==null?["preference_matching_enabled","geo_matching_enabled"]:["preference_matching_enabled"]);if(preferenceBlocked)return preferenceBlocked;}const accountToken=request.headers.get("x-account-authorization"),accountRequest=new Request(request.url,{headers:{authorization:accountToken||""}}),user=accountToken?await verifySupabaseUser(accountRequest,env):null;if(hasPaidPreferences(preferences)&&!user?.emailVerified)return Response.json({error:"verified_account_required_for_preferences"},{status:403});if(body.mode==="video"){if(!user?.emailVerified)return Response.json({error:"video_beta_not_available"},{status:403});let video;try{video=(await new ConfigService(env,env.FETCHER||fetch).video()).config;}catch{video=null;}if(!video?.enabled||!(video.betaUserIds||[]).includes(user.id))return Response.json({error:"video_beta_not_available"},{status:403});}if(user){const deletions=await new AccountPrivacyService(env,env.FETCHER||fetch).deletionRequested(user.id);if(deletions.length)return Response.json({error:"account_deletion_pending"},{status:403});if(user.emailVerified){body.accountUserId=user.id;const [blocks,profiles]=await Promise.all([supabaseRest(env,user,"/blocks?select=blocked_ref"),supabaseRest(env,user,`/profiles?select=public_id&user_id=eq.${encodeURIComponent(user.id)}&limit=1`)]);if(blocks.ok)body.blockedRefs=(await blocks.json()).map(item=>item.blocked_ref);if(profiles.ok)body.accountPublicId=(await profiles.json())[0]?.public_id||null;}}const restrictions=await new RestrictionService(env,env.FETCHER||fetch).find([claims.sub,user?.id,body.accountPublicId]);if(restrictions.length)return Response.json({error:"account_restricted",status:restrictions[0].status},{status:403});const allowed=await anon.fetch("https://anonymous.internal/authorize-search",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({identityId:claims.sub,registered:Boolean(user?.emailVerified)})});if(!allowed.ok)return allowed;await activateRequiredDailyAccess({eligibility:await allowed.json(),user,env});}catch(error){return Response.json({error:error.message},{status:error.message.includes("insufficient")?402:400});}}
+  if(authorizeSearch){const flagsBlocked=await requireFlags(env,["new_matches_enabled"]);if(flagsBlocked)return flagsBlocked;body.mode=body.mode==="video"?"video":"text";try{const preferences=normalizePaidPreferences(body.preferences||{});body.preferences=preferences;if(hasPaidPreferences(preferences)){const preferenceBlocked=await requireFlags(env,preferences.radiusKm!==null?["preference_matching_enabled","geo_matching_enabled"]:["preference_matching_enabled"]);if(preferenceBlocked)return preferenceBlocked;}const accountToken=request.headers.get("x-account-authorization"),accountRequest=new Request(request.url,{headers:{authorization:accountToken||""}}),user=accountToken?await verifySupabaseUser(accountRequest,env):null;if(hasPaidPreferences(preferences)&&!user?.emailVerified)return Response.json({error:"verified_account_required_for_preferences"},{status:403});if(body.mode==="video"&&env.VIDEO_BETA_OPEN!=="1"){if(!user?.emailVerified)return Response.json({error:"video_beta_not_available"},{status:403});let video;try{video=(await new ConfigService(env,env.FETCHER||fetch).video()).config;}catch{video=null;}if(!video?.enabled)return Response.json({error:"video_beta_not_available"},{status:403});if(!hasUnlimitedVideoSessions(video,user.id)){const profileResponse=await supabaseRest(env,user,`/profiles?select=video_sessions_used&user_id=eq.${encodeURIComponent(user.id)}&limit=1`);const [videoProfile]=profileResponse.ok?await profileResponse.json():[];if((videoProfile?.video_sessions_used||0)>=VIDEO_FREE_SESSION_LIMIT)return Response.json({error:"video_capacity_reached"},{status:503});}}if(user){const deletions=await new AccountPrivacyService(env,env.FETCHER||fetch).deletionRequested(user.id);if(deletions.length)return Response.json({error:"account_deletion_pending"},{status:403});if(user.emailVerified){body.accountUserId=user.id;const [blocks,profiles]=await Promise.all([supabaseRest(env,user,"/blocks?select=blocked_ref"),supabaseRest(env,user,`/profiles?select=public_id&user_id=eq.${encodeURIComponent(user.id)}&limit=1`)]);if(blocks.ok)body.blockedRefs=(await blocks.json()).map(item=>item.blocked_ref);if(profiles.ok)body.accountPublicId=(await profiles.json())[0]?.public_id||null;}}const restrictions=await new RestrictionService(env,env.FETCHER||fetch).find([claims.sub,user?.id,body.accountPublicId]);if(restrictions.length)return Response.json({error:"account_restricted",status:restrictions[0].status},{status:403});const allowed=await anon.fetch("https://anonymous.internal/authorize-search",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({identityId:claims.sub,registered:Boolean(user?.emailVerified)})});if(!allowed.ok)return allowed;await activateRequiredDailyAccess({eligibility:await allowed.json(),user,env});}catch(error){return Response.json({error:error.message},{status:error.message.includes("insufficient")?402:400});}}
   body.identityId=claims.sub;if(activity){await anon.fetch("https://anonymous.internal/activity",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({type:activity})});await recordAnalytics(env,{eventId:`${activity}:${crypto.randomUUID()}`,eventName:activity,dimension:body.accountUserId?"registered":"anonymous"});if(hasPaidPreferences(body.preferences||{}))await recordAnalytics(env,{eventId:`preference-search:${crypto.randomUUID()}`,eventName:"preference_search_started",dimension:"paid"});}return shard(env,"MATCHMAKING").fetch(`https://match.internal${path}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
 }
 export async function adminUser(request,env,verify=verifySupabaseUser){const user=await verify(request,env);if(!user)return{error:Response.json({error:"invalid_admin_session"},{status:401})};if(!user.emailVerified||!env.ADMIN_USER_ID||user.id!==env.ADMIN_USER_ID)return{error:Response.json({error:"admin_forbidden"},{status:403})};if(env.ADMIN_REQUIRE_AAL2!=="false"&&user.aal!=="aal2")return{error:Response.json({error:"admin_mfa_required"},{status:403})};return{user};}
@@ -40,12 +64,60 @@ async function recordAnalytics(env,event){if(!env?.SUPABASE_URL||!env?.SUPABASE_
 export function allowedOrigin(request,env){const origin=request.headers.get("origin");if(!origin)return null;const configured=String(env.ALLOWED_ORIGINS||env.ALLOWED_ORIGIN||"").split(",").map(value=>value.trim()).filter(Boolean),sameOrigin=new URL(request.url).origin;return new Set([...configured,sameOrigin]).has(origin)?origin:false;}
 export function secureResponse(response,request,env){if(response.status===101)return response;const headers=new Headers(response.headers),origin=allowedOrigin(request,env);headers.set("x-content-type-options","nosniff");headers.set("referrer-policy","no-referrer");headers.set("permissions-policy","camera=(), microphone=(), geolocation=()");headers.set("cross-origin-opener-policy","same-origin");headers.set("cross-origin-resource-policy","same-site");headers.set("strict-transport-security","max-age=31536000; includeSubDomains");headers.set("x-frame-options","DENY");headers.set("vary","Origin");headers.set("cache-control",request.method==="GET"&&["/api/v1/config/public","/api/v1/stats/public","/api/v1/compliance/public"].includes(new URL(request.url).pathname)?"public, max-age=30":"no-store");if(origin){headers.set("access-control-allow-origin",origin);headers.set("access-control-allow-credentials","true");}return new Response(response.body,{status:response.status,statusText:response.statusText,headers});}
 
+let isolateStartedAt = null;
+async function timedCheck(fn) {
+  const startedAt = Date.now();
+  try {
+    const detail = await fn();
+    return { status: "ok", latencyMs: Date.now() - startedAt, ...detail };
+  } catch (error) {
+    return { status: "outage", latencyMs: Date.now() - startedAt, message: error.message || "unreachable" };
+  }
+}
+async function buildHealthReport(env, fetcher = fetch) {
+  if (isolateStartedAt === null) isolateStartedAt = Date.now();
+  const checks = {};
+  checks.supabase = env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
+    ? await timedCheck(async () => {
+        const response = await fetcher(`${env.SUPABASE_URL}/rest/v1/`, { headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY } });
+        if (!response.ok && response.status !== 404) throw new Error(`unexpected_status_${response.status}`);
+        return {};
+      })
+    : { status: "unreachable", message: "not_configured" };
+  checks.storageR2 = env.RADIO_BUCKET
+    ? await timedCheck(async () => { await env.RADIO_BUCKET.head("__healthcheck__"); return {}; })
+    : { status: "unreachable", message: "not_configured" };
+  checks.durableObjects = {
+    status: env.MATCHMAKING && env.CHAT_SESSION && env.PARTY_ROOM ? "ok" : "outage",
+    message: "bindings_present_only; individual shards are not pinged to avoid unnecessary wake-ups",
+  };
+  checks.razorpay = env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET
+    ? { status: "ok", message: "credentials_configured; not actively pinged" }
+    : { status: "unreachable", message: "not_configured" };
+  checks.logs = { status: "unknown", message: "no centralized log aggregation configured for this service" };
+  const statuses = Object.values(checks).map(check => check.status);
+  const overall = statuses.includes("outage") ? "outage" : statuses.includes("unreachable") || statuses.includes("unknown") ? "degraded" : "ok";
+  return {
+    status: overall,
+    service: "sunoto-worker",
+    version: /^[0-9a-f]{40}$/i.test(env.RELEASE_REVISION || "") ? env.RELEASE_REVISION.toLowerCase() : null,
+    environment: env.ENVIRONMENT || "production",
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.round((Date.now() - isolateStartedAt) / 1000),
+    uptimeNote: "Cloudflare Workers are stateless/ephemeral at the edge; this is time-since-isolate-start, not deployment uptime.",
+    checks,
+    errors: { fatalCount: null, unknownCount: null, recent: [], note: "log-based error counts are not wired up yet — see ROADMAP" },
+  };
+}
 async function handleRequest(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/api/v1/health") return Response.json({ ok: true, service: "random-chat-worker", phase: 23,revision:/^[0-9a-f]{40}$/i.test(env.RELEASE_REVISION||"")?env.RELEASE_REVISION.toLowerCase():null });
+    if (url.pathname === "/api/v1/health") {
+      const report = await buildHealthReport(env, env.FETCHER || fetch);
+      return Response.json(report, { status: report.status === "outage" ? 503 : 200 });
+    }
     if(request.method==="GET"&&url.pathname==="/api/v1/config/public"){const configService=new ConfigService(env);let ads;try{ads=await configService.ads();}catch{ads={config:DEFAULT_AD_CONFIG,version:0};}let flags;try{flags=await configService.flags();}catch{flags={config:DEFAULT_FLAGS,version:0};}return Response.json({ads:ads.config,version:ads.version,flags:flags.config});}
     if(request.method==="POST"&&url.pathname==="/api/v1/analytics/event"){const limited=await enforceRateLimit(request,env,"analytics");if(limited)return limited;const body=await request.json().catch(()=>({}));if(!CLIENT_ANALYTICS_EVENTS.has(body.eventName)||!/^[a-zA-Z0-9_-]{8,160}$/.test(body.eventId||""))return Response.json({error:"invalid_analytics_event"},{status:400});const result=await recordAnalytics(env,{eventId:`client:${body.eventId}`,eventName:body.eventName,dimension:"anonymous"});return result?Response.json(result):Response.json({recorded:false},{status:503});}
-    if(request.method==="GET"&&url.pathname==="/api/v1/stats/public"){try{const snapshot=await new AnalyticsService(env,env.ANALYTICS_FETCHER||fetch).publicSnapshot();return Response.json({realConnectionsToday:approximatePublicCount(snapshot.realConnectionsToday),virtualConnectionsToday:approximatePublicCount(snapshot.virtualConnectionsToday),messagesToday:approximatePublicCount(snapshot.messagesToday),asOf:snapshot.asOf,approximate:true});}catch{return Response.json({error:"stats_temporarily_unavailable"},{status:503});}}
+    if(request.method==="GET"&&url.pathname==="/api/v1/stats/public"){try{const [snapshot,presenceResponse]=await Promise.all([new AnalyticsService(env,env.ANALYTICS_FETCHER||fetch).publicSnapshot(),shard(env,"PRESENCE").fetch("https://presence.internal/stats")]),presence=await presenceResponse.json();return Response.json({realConnectionsToday:approximatePublicCount(snapshot.realConnectionsToday),virtualConnectionsToday:approximatePublicCount(snapshot.virtualConnectionsToday),messagesToday:approximatePublicCount(snapshot.messagesToday),registeredUsers:Number(snapshot.registeredUsers)||0,realActiveSessions:(presence.anonymousOnline||0)+(presence.registeredOnline||0),asOf:snapshot.asOf,approximate:true});}catch{return Response.json({error:"stats_temporarily_unavailable"},{status:503});}}
     if(url.pathname.startsWith("/api/v1/admin/")){
       const authorization=await adminUser(request,env);if(authorization.error)return authorization.error;const user=authorization.user,config=new ConfigService(env,env.FETCHER||fetch),admin=new AdminService(env,env.FETCHER||fetch);try{
         if(url.pathname==="/api/v1/admin/ads"&&(request.method==="GET"||request.method==="PUT")){if(request.method==="GET")return Response.json(await config.ads());const body=await request.json();if(!Number.isSafeInteger(body.expectedVersion))return Response.json({error:"invalid_config_version"},{status:400});return Response.json(await config.updateAds({adminId:user.id,expectedVersion:body.expectedVersion,config:body.config}));}
@@ -66,8 +138,18 @@ async function handleRequest(request, env) {
         if(request.method==="GET"&&url.pathname==="/api/v1/admin/offers")return Response.json({offers:await admin.promotions("offer")});
         if(request.method==="GET"&&url.pathname==="/api/v1/admin/coupons")return Response.json({coupons:await admin.promotions("coupon")});
         if(request.method==="GET"&&url.pathname==="/api/v1/admin/audit")return Response.json({audit:await admin.audit()});
+        if(request.method==="GET"&&url.pathname==="/api/v1/admin/games/revenue")return Response.json({entries:await admin.gamesRevenue(Number(url.searchParams.get("limit")||100))});
+        if(request.method==="GET"&&url.pathname==="/api/v1/admin/games/rounds")return Response.json({rounds:await admin.gamesRounds(url.searchParams.get("gameType")||"",Number(url.searchParams.get("limit")||100))});
+        if(request.method==="GET"&&url.pathname==="/api/v1/admin/games/jackpot-rounds")return Response.json({rounds:await admin.jackpotRounds(Number(url.searchParams.get("limit")||50))});
+        if(request.method==="GET"&&url.pathname==="/api/v1/admin/games/trivia-rounds")return Response.json({rounds:await admin.triviaRounds(Number(url.searchParams.get("limit")||50))});
+        if(request.method==="GET"&&url.pathname==="/api/v1/admin/games/wheel-segments")return Response.json({segments:await admin.wheelSegments()});
+        if(request.method==="PUT"&&url.pathname==="/api/v1/admin/games/wheel-segments"){const body=await request.json();if(!Array.isArray(body.segments)||!body.segments.length)return Response.json({error:"invalid_wheel_segments"},{status:400});return Response.json({segments:await admin.updateWheelSegments({adminId:user.id,segments:body.segments})});}
+        if(request.method==="GET"&&url.pathname==="/api/v1/admin/games/trivia-schedule")return Response.json({schedule:await admin.scheduledTriviaQuestions(Number(url.searchParams.get("limit")||20))});
+        if(request.method==="POST"&&url.pathname==="/api/v1/admin/games/trivia-schedule"){const body=await request.json();if(!/^\d{4}-\d{2}-\d{2}$/.test(body.triviaDate||"")||!Array.isArray(body.questions)||body.questions.length!==5)return Response.json({error:"invalid_trivia_schedule"},{status:400});return Response.json({schedule:await admin.scheduleTriviaQuestions({adminId:user.id,triviaDate:body.triviaDate,questions:body.questions})});}
+        if(request.method==="PUT"&&url.pathname==="/api/v1/admin/radio/artist-links"){const body=await request.json();if(!/^[0-9a-fA-F-]{36}$/.test(body.roomPublicId||""))return Response.json({error:"invalid_room"},{status:400});await admin.setRadioArtistLinks({adminId:user.id,roomPublicId:body.roomPublicId,spotifyUrl:body.spotifyUrl||"",appleMusicUrl:body.appleMusicUrl||""});return Response.json({ok:true});}
         if(request.method==="POST"&&url.pathname==="/api/v1/admin/wallet"){const body=await request.json(),delta=Number(body.delta);if(!/^[0-9a-f-]{36}$/i.test(body.userId||"")||!Number.isSafeInteger(delta)||delta===0||typeof body.reason!=="string"||!/^[0-9a-f-]{36}$/i.test(body.operationId||""))return Response.json({error:"invalid_wallet_adjustment"},{status:400});return Response.json({result:(await admin.wallet({adminId:user.id,userId:body.userId,delta,reason:body.reason,operationId:body.operationId}))[0]});}
         if(request.method==="POST"&&url.pathname==="/api/v1/admin/restrictions"){const body=await request.json();if(typeof body.targetRef!=="string"||!["restricted","banned","clear"].includes(body.status)||typeof body.reason!=="string")return Response.json({error:"invalid_restriction"},{status:400});const result=await admin.restrict({adminId:user.id,targetRef:body.targetRef,status:body.status,reason:body.reason}),enforcement=body.status!=="clear"?await endMatches(env,body.targetRef):null;return Response.json({restriction:result,enforcement});}
+        if(request.method==="POST"&&url.pathname==="/api/v1/admin/premium"){const body=await request.json();if(!/^[0-9a-f-]{36}$/i.test(body.userId||"")||typeof body.premium!=="boolean")return Response.json({error:"invalid_premium_update"},{status:400});return Response.json({profile:await admin.setPremium({adminId:user.id,userId:body.userId,premium:body.premium})});}
         if(request.method==="POST"&&url.pathname==="/api/v1/admin/promotions"){const body=await request.json();if(!["offer","coupon"].includes(body.type)||!body.payload||typeof body.payload!=="object")return Response.json({error:"invalid_promotion"},{status:400});return Response.json({promotion:await admin.savePromotion({adminId:user.id,type:body.type,payload:body.payload})});}
         return Response.json({error:"admin_route_not_found"},{status:404});
       }catch(error){return Response.json({error:error.message},{status:error.message.includes("version_conflict")||error.message.includes("insufficient")?409:400});}
@@ -81,10 +163,28 @@ async function handleRequest(request, env) {
     if(request.method==="GET"&&url.pathname==="/api/v1/me/export"){const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});return Response.json(await new AccountPrivacyService(env,env.FETCHER||fetch).export(user.id),{headers:{"content-disposition":"attachment; filename=random-chat-data.json"}});}
     if(request.method==="DELETE"&&url.pathname==="/api/v1/me/account"){const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const body=await request.json().catch(()=>({}));if(body.confirm!=="DELETE")return Response.json({error:"deletion_confirmation_required"},{status:400});const result=await new AccountPrivacyService(env,env.FETCHER||fetch).requestDeletion(user.id,String(body.reason||""));await endMatches(env,user.id);return Response.json({requested:true,request:Array.isArray(result)?result[0]:result},{status:202});}
     if(request.method==="GET"&&url.pathname==="/api/v1/me/profile"){
-      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const response=await supabaseRest(env,user,`/profiles?select=public_id,username,username_change_count,username_changed_at&user_id=eq.${encodeURIComponent(user.id)}&limit=1`);if(!response.ok)return Response.json({error:"profile_lookup_failed"},{status:502});const [profile]=await response.json();return Response.json({user:{id:user.id,email:user.email,emailVerified:user.emailVerified},profile:profile||null});
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const response=await supabaseRest(env,user,`/profiles?select=public_id,username,username_change_count,username_changed_at,is_premium,theme_pattern,theme_palette,verified_at,avatar_url&user_id=eq.${encodeURIComponent(user.id)}&limit=1`);if(!response.ok)return Response.json({error:"profile_lookup_failed"},{status:502});const [profile]=await response.json();return Response.json({user:{id:user.id,email:user.email,emailVerified:user.emailVerified},profile:profile||null});
+    }
+    if(request.method==="POST"&&url.pathname==="/api/v1/avatar"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});
+      const contentType=request.headers.get("content-type")||"";if(!contentType.includes("multipart/form-data"))return Response.json({error:"invalid_upload"},{status:400});
+      const form=await request.formData();
+      const avatarFile=form.get("avatar");
+      if(!(avatarFile instanceof File)||avatarFile.size<100||avatarFile.size>5*1024*1024)return Response.json({error:"invalid_avatar_file"},{status:400});
+      const avatarBytes=new Uint8Array(await avatarFile.arrayBuffer());
+      const avatarExt=looksLikeImage(avatarBytes);
+      if(!avatarExt)return Response.json({error:"invalid_avatar_file"},{status:400});
+      const storageKey=`avatars/${user.id}/${crypto.randomUUID()}.${avatarExt}`;
+      await env.RADIO_BUCKET.put(storageKey,avatarBytes,{httpMetadata:{contentType:avatarFile.type||"image/jpeg"}});
+      const response=await supabaseRest(env,user,"/rpc/set_avatar_url",{method:"POST",body:JSON.stringify({desired_avatar_url:`/api/v1/radio-media/${storageKey}`})});
+      if(!response.ok){await env.RADIO_BUCKET.delete(storageKey).catch(()=>{});const error=await response.json().catch(()=>({}));const message=error.message||"avatar_update_failed";return Response.json({error:message},{status:message==="verification_required"?403:400});}
+      return Response.json((await response.json())[0]||null);
     }
     if(request.method==="POST"&&url.pathname==="/api/v1/username"){
-      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});if(!user.emailVerified)return Response.json({error:"email_verification_required"},{status:403});const body=await request.json(),username=String(body.username||"").trim();if(!validUsername(username))return Response.json({error:"invalid_username"},{status:400});const response=await supabaseRest(env,user,"/rpc/claim_username",{method:"POST",body:JSON.stringify({desired_username:username})});if(!response.ok){const error=await response.json().catch(()=>({}));return Response.json({error:error.message||"username_update_failed"},{status:response.status===409?409:400});}return Response.json({profile:(await response.json())[0]||null});
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});if(!user.emailVerified)return Response.json({error:"email_verification_required"},{status:403});const body=await request.json(),username=String(body.username||"").trim();if(!validUsername(username))return Response.json({error:"invalid_username"},{status:400});const response=await supabaseRest(env,user,"/rpc/claim_username",{method:"POST",body:JSON.stringify({desired_username:username})});if(!response.ok){const error=await response.json().catch(()=>({}));const message=error.message||"username_update_failed";return Response.json({error:message},{status:message==="premium_required"?403:response.status===409?409:400});}return Response.json({profile:(await response.json())[0]||null});
+    }
+    if(request.method==="POST"&&url.pathname==="/api/v1/theme"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const body=await request.json(),patternId=String(body.patternId||""),paletteId=String(body.paletteId||"");if(!validPatternId(patternId)||!validPaletteId(paletteId))return Response.json({error:"invalid_theme"},{status:400});const response=await supabaseRest(env,user,"/rpc/set_theme",{method:"POST",body:JSON.stringify({desired_pattern:patternId,desired_palette:paletteId})});if(!response.ok){const error=await response.json().catch(()=>({}));const message=error.message||"theme_update_failed";return Response.json({error:message},{status:message==="premium_required"?403:400});}const [row]=await response.json();return Response.json({patternId:row?.theme_pattern||null,paletteId:row?.theme_palette||null});
     }
     if(request.method==="POST"&&url.pathname==="/api/v1/account/device/claim"){
       const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const body=await request.json(),stub=shard(env,"DEVICE_OWNERSHIP",user.id);return stub.fetch("https://device.internal/claim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({deviceId:body.deviceId})});
@@ -102,7 +202,49 @@ async function handleRequest(request, env) {
       const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const limited=await enforceRateLimit(request,env,"payment",user.id);if(limited)return limited;try{const body=await request.json(),paymentId=String(body.razorpay_payment_id||""),result=await new PaymentService(env).verifyCheckout({user,orderId:String(body.razorpay_order_id||""),paymentId,signature:String(body.razorpay_signature||"")});await recordAnalytics(env,{eventId:`recharge-success:${paymentId}`,eventName:"recharge_success",dimension:"registered"});return Response.json({verified:true,result:result[0]});}catch(error){await recordAnalytics(env,{eventId:`recharge-failed:${crypto.randomUUID()}`,eventName:"recharge_failed",dimension:"registered"});return Response.json({error:error.message},{status:error.message==="invalid_payment_signature"?400:409});}
     }
     if(request.method==="POST"&&url.pathname==="/api/v1/payments/webhook"){
-      try{const rawBody=await readTextBody(request,MAX_WEBHOOK_BODY_BYTES,"webhook_payload_too_large"),result=await new PaymentService(env).webhook(rawBody,request.headers.get("x-razorpay-signature")||"",request.headers.get("x-razorpay-event-id")||"");if(result.paymentId&&["payment.captured","order.paid"].includes(result.eventType))await recordAnalytics(env,{eventId:`recharge-success:${result.paymentId}`,eventName:"recharge_success",dimension:"registered"});return Response.json(result);}catch(error){return Response.json({error:error.message},{status:error.message.includes("signature")?401:error.message==="webhook_payload_too_large"?413:400});}
+      try{const rawBody=await readTextBody(request,MAX_WEBHOOK_BODY_BYTES,"webhook_payload_too_large"),result=await new PaymentService(env).webhook(rawBody,request.headers.get("x-razorpay-signature")||"",request.headers.get("x-razorpay-event-id")||"",{onSubscriptionEvent:(eventType,entity)=>new StreamingMembershipService(env,env.FETCHER||fetch).onWebhookEvent(eventType,entity)});if(result.paymentId&&["payment.captured","order.paid"].includes(result.eventType))await recordAnalytics(env,{eventId:`recharge-success:${result.paymentId}`,eventName:"recharge_success",dimension:"registered"});return Response.json(result);}catch(error){return Response.json({error:error.message},{status:error.message.includes("signature")?401:error.message==="webhook_payload_too_large"?413:400});}
+    }
+    if(request.method==="POST"&&url.pathname==="/api/v1/streaming-membership/subscribe"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const flagsBlocked=await requireFlags(env,["payments_enabled"]);if(flagsBlocked)return flagsBlocked;const limited=await enforceRateLimit(request,env,"payment",user.id);if(limited)return limited;try{return Response.json(await new StreamingMembershipService(env,env.FETCHER||fetch).createSubscription(user));}catch(error){return Response.json({error:error.message},{status:error.message==="email_verification_required"?403:502});}
+    }
+    if(request.method==="POST"&&url.pathname==="/api/v1/streaming-membership/verify"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const limited=await enforceRateLimit(request,env,"payment",user.id);if(limited)return limited;try{const body=await request.json(),result=await new StreamingMembershipService(env,env.FETCHER||fetch).verifyCheckout({user,subscriptionId:String(body.razorpay_subscription_id||""),paymentId:String(body.razorpay_payment_id||""),signature:String(body.razorpay_signature||"")});return Response.json({verified:true,result});}catch(error){return Response.json({error:error.message},{status:error.message.includes("signature")?400:409});}
+    }
+    if(request.method==="GET"&&url.pathname==="/api/v1/streaming-membership/status"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const active=await new StreamingMembershipService(env,env.FETCHER||fetch).status(user.id);return Response.json({active});
+    }
+    if(request.method==="POST"&&url.pathname==="/api/v1/verification/request"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});if(!user.emailVerified)return Response.json({error:"email_verification_required"},{status:403});const limited=await enforceRateLimit(request,env,"payment",user.id);if(limited)return limited;try{return Response.json(await new VerificationService(env,env.FETCHER||fetch).request(user.id));}catch(error){return Response.json({error:error.message},{status:error.message==="verification_requires_consistent_activity"?403:400});}
+    }
+    if(request.method==="GET"&&url.pathname==="/api/v1/games/wheel/odds"){
+      try{const odds=await new GamesService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).wheelOdds();return Response.json({segments:odds});}catch(error){return Response.json({error:error.message},{status:502});}
+    }
+    if(request.method==="POST"&&url.pathname==="/api/v1/games/wheel/spin"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const flagsBlocked=await requireFlags(env,["payments_enabled"]);if(flagsBlocked)return flagsBlocked;const limited=await enforceRateLimit(request,env,"games",user.id);if(limited)return limited;const body=await request.json(),idempotencyKey=`wheel-spin:${user.id}:${crypto.randomUUID()}`;try{const result=await new GamesService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).playWheel(user.id,Number(body.stakeCredits),idempotencyKey);return Response.json(result);}catch(error){return Response.json({error:error.message},{status:["minimum_100_sparks_required","insufficient_credits","daily_stake_cap_reached"].includes(error.message)?403:400});}
+    }
+    if(request.method==="GET"&&url.pathname==="/api/v1/games/wheel/leaderboard"){
+      try{const rows=await new GamesService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).leaderboard("wheel",20);return Response.json({rounds:rows});}catch(error){return Response.json({error:error.message},{status:502});}
+    }
+    if(request.method==="GET"&&url.pathname==="/api/v1/games/jackpot/current"){
+      try{const round=await new GamesService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).currentJackpotRound();return Response.json({round});}catch(error){return Response.json({error:error.message},{status:502});}
+    }
+    if(request.method==="POST"&&url.pathname==="/api/v1/games/jackpot/buy"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const flagsBlocked=await requireFlags(env,["payments_enabled"]);if(flagsBlocked)return flagsBlocked;const limited=await enforceRateLimit(request,env,"games",user.id);if(limited)return limited;const body=await request.json(),idempotencyKey=`jackpot-buy:${user.id}:${crypto.randomUUID()}`;try{const walletResponse=await supabaseRest(env,user,`/wallets?select=balance&user_id=eq.${encodeURIComponent(user.id)}&limit=1`),[wallet]=walletResponse.ok?await walletResponse.json():[null];if(!wallet||wallet.balance<10000)return Response.json({error:"minimum_100_sparks_required"},{status:403});const result=await new GamesService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).buyJackpotTickets(user.id,Number(body.ticketCount),idempotencyKey);return Response.json(result);}catch(error){return Response.json({error:error.message},{status:["insufficient_credits","daily_stake_cap_reached"].includes(error.message)?403:400});}
+    }
+    if(request.method==="GET"&&url.pathname==="/api/v1/games/jackpot/leaderboard"){
+      try{const rows=await new GamesService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).leaderboard("jackpot",20);return Response.json({rounds:rows});}catch(error){return Response.json({error:error.message},{status:502});}
+    }
+    if(request.method==="GET"&&url.pathname==="/api/v1/games/trivia/current"){
+      try{const round=await new GamesService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).currentTriviaRound();return Response.json({round});}catch(error){return Response.json({error:error.message},{status:502});}
+    }
+    if(request.method==="POST"&&url.pathname==="/api/v1/games/trivia/submit"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const flagsBlocked=await requireFlags(env,["payments_enabled"]);if(flagsBlocked)return flagsBlocked;const limited=await enforceRateLimit(request,env,"games",user.id);if(limited)return limited;const body=await request.json(),idempotencyKey=`trivia-submit:${user.id}:${crypto.randomUUID()}`;try{const result=await new GamesService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).submitTriviaEntry(user.id,body.answers,Number(body.responseMs),idempotencyKey);return Response.json(result);}catch(error){return Response.json({error:error.message},{status:["already_submitted","round_closed","insufficient_credits","daily_stake_cap_reached"].includes(error.message)?403:400});}
+    }
+    if(request.method==="GET"&&url.pathname==="/api/v1/games/daily-usage"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});try{const usage=await new GamesService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).dailyStakeUsage(user.id);return Response.json(usage);}catch(error){return Response.json({error:error.message},{status:502});}
+    }
+    if(request.method==="GET"&&url.pathname==="/api/v1/games/trivia/leaderboard"){
+      try{const rows=await new GamesService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).leaderboard("trivia",20);return Response.json({rounds:rows});}catch(error){return Response.json({error:error.message},{status:502});}
     }
     if(request.method==="POST"&&url.pathname==="/api/v1/reconnect/request"){
       const claims=await anonymousClaims(request,env);if(!claims)return Response.json({error:"invalid_anonymous_session"},{status:401});const flagsBlocked=await requireFlags(env,["favourite_reconnect_enabled"]);if(flagsBlocked)return flagsBlocked;const accountToken=request.headers.get("x-account-authorization"),accountRequest=new Request(request.url,{headers:{authorization:accountToken||""}}),user=await verifySupabaseUser(accountRequest,env);if(!user?.emailVerified)return Response.json({error:"verified_account_required"},{status:403});const profileResponse=await supabaseRest(env,user,`/profiles?select=public_id&user_id=eq.${encodeURIComponent(user.id)}&limit=1`),profile=profileResponse.ok?(await profileResponse.json())[0]:null,restrictions=await new RestrictionService(env,env.FETCHER||fetch).find([claims.sub,user.id,profile?.public_id]);if(restrictions.length)return Response.json({error:"account_restricted",status:restrictions[0].status},{status:403});const body=await request.json();return shard(env,"MATCHMAKING").fetch("https://match.internal/reconnect/request",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({initiatorId:claims.sub,initiatorUserId:user.id,initiatorPublicId:profile?.public_id||null,targetId:String(body.targetPeerId||"")})});
@@ -119,6 +261,154 @@ async function handleRequest(request, env) {
     if(request.method==="POST"&&url.pathname==="/api/v1/match/end")return proxyJson(request,env,"/end");
     if(request.method==="GET"&&url.pathname==="/api/v1/match/result"){const claims=await anonymousClaims(request,env);if(!claims)return Response.json({error:"invalid_anonymous_session"},{status:401});const forcePersonaId=env.ALLOW_FORCE_PERSONA==="1"?url.searchParams.get("forcePersonaId"):null;return shard(env,"MATCHMAKING").fetch(`https://match.internal/result/${claims.sub}${forcePersonaId?`?forcePersonaId=${encodeURIComponent(forcePersonaId)}`:""}`);}
     if(request.method==="POST"&&url.pathname==="/api/v1/presence/heartbeat"){const claims=await anonymousClaims(request,env);if(!claims)return Response.json({error:"invalid_anonymous_session"},{status:401});const body=await request.json(),accountToken=request.headers.get("x-account-authorization"),accountRequest=new Request(request.url,{headers:{authorization:accountToken||""}}),account=accountToken?await verifySupabaseUser(accountRequest,env):null;let publicRef=null;if(account?.emailVerified){const response=await supabaseRest(env,account,`/profiles?select=public_id&user_id=eq.${encodeURIComponent(account.id)}&limit=1`);if(response.ok)publicRef=(await response.json())[0]?.public_id||null;}return shard(env,"PRESENCE").fetch("https://presence.internal/status",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...body,identityId:claims.sub,anonymous:!account?.emailVerified,accountUserId:account?.emailVerified?account.id:null,publicRef})});}
+    if(request.method==="POST"&&url.pathname==="/api/v1/party-rooms"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});if(!user.emailVerified)return Response.json({error:"email_verification_required"},{status:403});
+      const body=await request.json(),roomType=String(body.roomType||""),priceTier=String(body.priceTier||""),name=String(body.name||"").trim(),months=Number(body.months)||1;
+      if(!validRoomTypeId(roomType)||!validPriceTierId(priceTier))return Response.json({error:"invalid_room_config"},{status:400});
+      const response=await supabaseRest(env,user,"/rpc/create_party_room",{method:"POST",body:JSON.stringify({desired_room_type:roomType,desired_price_tier:priceTier,desired_name:name,desired_months:months})});
+      if(!response.ok){const error=await response.json().catch(()=>({}));return Response.json({error:error.message||"party_room_create_failed"},{status:error.message==="insufficient_credits"?402:400});}
+      return Response.json((await response.json())[0]||null);
+    }
+    if(request.method==="GET"&&url.pathname==="/api/v1/party-rooms/public"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});
+      const response=await supabaseRest(env,user,"/rpc/list_public_radio_rooms",{method:"POST",body:"{}"});
+      if(!response.ok)return Response.json({error:"public_rooms_failed"},{status:400});
+      const rows=await response.json();
+      const listenerCounts=await Promise.all(rows.map(row=>shard(env,"PARTY_ROOM",row.public_id).fetch("https://party-room.internal/listeners").then(r=>r.json()).then(d=>d.count||0).catch(()=>0)));
+      return Response.json({rooms:rows.map((row,index)=>({publicId:row.public_id,name:row.name,joinCode:row.join_code,roomType:row.room_type,nowPlaying:row.now_playing_title?{title:row.now_playing_title,artistName:row.now_playing_artist}:null,realListeners:listenerCounts[index],artistSpotifyUrl:row.artist_spotify_url,artistAppleMusicUrl:row.artist_apple_music_url,curatedOnly:row.curated_only}))});
+    }
+    if(request.method==="POST"&&url.pathname==="/api/v1/party-rooms/join"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});
+      const body=await request.json(),joinCode=String(body.joinCode||"").trim();if(!joinCode)return Response.json({error:"invalid_join_code"},{status:400});
+      const response=await supabaseRest(env,user,"/rpc/join_party_room_by_code",{method:"POST",body:JSON.stringify({desired_join_code:joinCode})});
+      if(!response.ok){const error=await response.json().catch(()=>({}));return Response.json({error:error.message||"join_failed"},{status:404});}
+      return Response.json((await response.json())[0]||null);
+    }
+    const inviteMatch=url.pathname.match(/^\/api\/v1\/party-rooms\/([0-9a-fA-F-]{36})\/invite$/);
+    if(request.method==="POST"&&inviteMatch){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});
+      const body=await request.json(),inviteeUserId=body.inviteeUserId?String(body.inviteeUserId):null,inviteeUsername=body.inviteeUsername?String(body.inviteeUsername):null;
+      const response=await supabaseRest(env,user,"/rpc/invite_to_party_room",{method:"POST",body:JSON.stringify({target_public_id:inviteMatch[1],invitee_user_id:inviteeUserId,invitee_username:inviteeUsername})});
+      if(!response.ok){const error=await response.json().catch(()=>({}));return Response.json({error:error.message||"invite_failed"},{status:error.message==="not_authorized"?403:400});}
+      return Response.json((await response.json())[0]||null);
+    }
+    const claimMatch=url.pathname.match(/^\/api\/v1\/party-rooms\/([0-9a-fA-F-]{36})\/claim-host$/);
+    if(request.method==="POST"&&claimMatch){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});
+      const response=await supabaseRest(env,user,"/rpc/claim_party_room_host",{method:"POST",body:JSON.stringify({target_public_id:claimMatch[1],inactivity_timeout_seconds:HOST_INACTIVITY_TIMEOUT_SECONDS})});
+      if(!response.ok){const error=await response.json().catch(()=>({}));return Response.json({error:error.message||"claim_failed"},{status:error.message==="host_slot_active"?409:400});}
+      const [row]=await response.json();
+      const namespace=env.PARTY_ROOM,stub=namespace.get(namespace.idFromName(claimMatch[1]));
+      await stub.fetch("https://party-room.internal/admin/set-host",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({hostUserId:user.id})}).catch(()=>{});
+      return Response.json(row||null);
+    }
+    if(request.method==="GET"&&url.pathname==="/api/v1/radio/channels"){
+      const user=await verifySupabaseUser(request,env)||{accessToken:env.SUPABASE_PUBLISHABLE_KEY};
+      const response=await supabaseRest(env,user,"/rpc/list_radio_channels",{method:"POST",body:JSON.stringify({})});
+      if(!response.ok)return Response.json({error:"radio_channels_failed"},{status:400});
+      const rows=await response.json();
+      const listenerCounts=await Promise.all(rows.map(row=>shard(env,"PARTY_ROOM",row.public_id).fetch("https://party-room.internal/listeners").then(r=>r.json()).then(d=>d.count||0).catch(()=>0)));
+      return Response.json({channels:rows.map((row,index)=>({publicId:row.public_id,name:row.name,roomType:row.room_type,curatedOnly:row.curated_only,realListeners:listenerCounts[index],artistSpotifyUrl:row.artist_spotify_url,artistAppleMusicUrl:row.artist_apple_music_url}))});
+    }
+    if(request.method==="POST"&&url.pathname==="/api/v1/admin/radio/tracks"){
+      const authorization=await adminUser(request,env);if(authorization.error)return authorization.error;
+      const contentType=request.headers.get("content-type")||"";if(!contentType.includes("multipart/form-data"))return Response.json({error:"invalid_upload"},{status:400});
+      const form=await request.formData();
+      const roomPublicId=String(form.get("roomPublicId")||"");
+      const title=String(form.get("title")||"").trim().slice(0,120);
+      const artistName=String(form.get("artistName")||"").trim().slice(0,120);
+      const durationSeconds=Math.round(Number(form.get("durationSeconds"))||0);
+      const audioFile=form.get("audio"),artworkFile=form.get("artwork");
+      if(!/^[0-9a-fA-F-]{36}$/.test(roomPublicId))return Response.json({error:"invalid_room"},{status:400});
+      if(!title)return Response.json({error:"invalid_track_title"},{status:400});
+      if(!Number.isFinite(durationSeconds)||durationSeconds<30||durationSeconds>900)return Response.json({error:"invalid_track_duration"},{status:400});
+      if(!(audioFile instanceof File)||audioFile.size<1000||audioFile.size>25*1024*1024)return Response.json({error:"invalid_audio_file"},{status:400});
+      const audioBytes=new Uint8Array(await audioFile.arrayBuffer());
+      const audioExt=looksLikeAudio(audioBytes);
+      if(!audioExt)return Response.json({error:"not_a_valid_audio_track"},{status:400});
+      let artworkKey=null;
+      if(artworkFile instanceof File&&artworkFile.size>0){
+        if(artworkFile.size>5*1024*1024)return Response.json({error:"invalid_artwork_file"},{status:400});
+        const artworkBytes=new Uint8Array(await artworkFile.arrayBuffer());
+        const artworkExt=looksLikeImage(artworkBytes);
+        if(!artworkExt)return Response.json({error:"invalid_artwork_file"},{status:400});
+        artworkKey=`radio/${roomPublicId}/${crypto.randomUUID()}.${artworkExt}`;
+        await env.RADIO_BUCKET.put(artworkKey,artworkBytes,{httpMetadata:{contentType:artworkFile.type||"image/jpeg"}});
+      }
+      const storageKey=`radio/${roomPublicId}/${crypto.randomUUID()}.${audioExt}`;
+      await env.RADIO_BUCKET.put(storageKey,audioBytes,{httpMetadata:{contentType:audioFile.type||"audio/mpeg"}});
+      const service=new RadioService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch});
+      try{
+        const result=await service.rpc("admin_submit_radio_track",{target_room_public_id:roomPublicId,target_title:title,target_artist_name:artistName||null,target_storage_key:storageKey,target_artwork_key:artworkKey,target_duration_seconds:durationSeconds});
+        return Response.json(result?.[0]||null);
+      }catch(error){
+        await env.RADIO_BUCKET.delete(storageKey).catch(()=>{});if(artworkKey)await env.RADIO_BUCKET.delete(artworkKey).catch(()=>{});
+        return Response.json({error:error.message||"radio_submit_failed"},{status:400});
+      }
+    }
+    const radioQueueMatch=url.pathname.match(/^\/api\/v1\/party-rooms\/([0-9a-fA-F-]{36})\/radio\/tracks$/);
+    if(request.method==="GET"&&radioQueueMatch){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});
+      const response=await supabaseRest(env,user,"/rpc/list_radio_queue",{method:"POST",body:JSON.stringify({target_room_public_id:radioQueueMatch[1]})});
+      if(!response.ok)return Response.json({error:"radio_queue_failed"},{status:400});
+      const rows=await response.json();
+      return Response.json({tracks:rows.map(row=>({id:row.id,title:row.title,artistName:row.artist_name,artworkUrl:row.artwork_key?`/api/v1/radio-media/${row.artwork_key}`:null,durationSeconds:row.duration_seconds,status:row.status,listenerMessage:row.listener_message}))});
+    }
+    if(request.method==="POST"&&radioQueueMatch){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});if(!user.emailVerified)return Response.json({error:"email_verification_required"},{status:403});
+      const contentType=request.headers.get("content-type")||"";if(!contentType.includes("multipart/form-data"))return Response.json({error:"invalid_upload"},{status:400});
+      const form=await request.formData();
+      const rightsAttested=form.get("rightsAttested")==="true";
+      const title=String(form.get("title")||"").trim().slice(0,120);
+      const artistName=String(form.get("artistName")||"").trim().slice(0,120);
+      const listenerMessage=String(form.get("message")||"").trim().slice(0,200);
+      const durationSeconds=Math.round(Number(form.get("durationSeconds"))||0);
+      const audioFile=form.get("audio"),artworkFile=form.get("artwork");
+      if(!rightsAttested)return Response.json({error:"rights_attestation_required"},{status:400});
+      if(!title)return Response.json({error:"invalid_track_title"},{status:400});
+      if(!Number.isFinite(durationSeconds)||durationSeconds<30||durationSeconds>900)return Response.json({error:"invalid_track_duration"},{status:400});
+      if(!(audioFile instanceof File)||audioFile.size<1000||audioFile.size>25*1024*1024)return Response.json({error:"invalid_audio_file"},{status:400});
+      const audioBytes=new Uint8Array(await audioFile.arrayBuffer());
+      if(!looksLikeAudio(audioBytes))return Response.json({error:"not_a_valid_audio_track"},{status:400});
+      let artworkKey=null;
+      if(artworkFile instanceof File&&artworkFile.size>0){
+        if(artworkFile.size>5*1024*1024)return Response.json({error:"invalid_artwork_file"},{status:400});
+        const artworkBytes=new Uint8Array(await artworkFile.arrayBuffer());
+        const artworkExt=looksLikeImage(artworkBytes);
+        if(!artworkExt)return Response.json({error:"invalid_artwork_file"},{status:400});
+        artworkKey=`radio/${radioQueueMatch[1]}/${crypto.randomUUID()}.${artworkExt}`;
+        await env.RADIO_BUCKET.put(artworkKey,artworkBytes,{httpMetadata:{contentType:artworkFile.type||"image/jpeg"}});
+      }
+      const audioExt=looksLikeAudio(audioBytes);
+      const storageKey=`radio/${radioQueueMatch[1]}/${crypto.randomUUID()}.${audioExt}`;
+      await env.RADIO_BUCKET.put(storageKey,audioBytes,{httpMetadata:{contentType:audioFile.type||"audio/mpeg"}});
+      const response=await supabaseRest(env,user,"/rpc/submit_radio_track",{method:"POST",body:JSON.stringify({target_room_public_id:radioQueueMatch[1],target_title:title,target_artist_name:artistName||null,target_storage_key:storageKey,target_artwork_key:artworkKey,target_duration_seconds:durationSeconds,target_rights_attested:true,target_listener_message:listenerMessage||null})});
+      if(!response.ok){await env.RADIO_BUCKET.delete(storageKey).catch(()=>{});if(artworkKey)await env.RADIO_BUCKET.delete(artworkKey).catch(()=>{});const error=await response.json().catch(()=>({}));return Response.json({error:error.message||"radio_submit_failed"},{status:400});}
+      return Response.json((await response.json())[0]||null);
+    }
+    const radioMediaMatch=url.pathname.match(/^\/api\/v1\/radio-media\/((?:radio\/[0-9a-fA-F-]{36}|avatars\/[0-9a-fA-F-]{36})\/[a-zA-Z0-9-]+\.[a-z0-9]{2,5})$/);
+    if(request.method==="GET"&&radioMediaMatch){
+      const key=radioMediaMatch[1];
+      if(key.startsWith("radio/")&&env.ANON_SESSION_SECRET){
+        const claims=await verifyAnonymousToken(url.searchParams.get("t"),env.ANON_SESSION_SECRET);
+        if(!claims||claims.kind!=="radio-media"||claims.sub!==key)return Response.json({error:"expired_or_invalid_media_link"},{status:403});
+      }
+      const rangeHeader=request.headers.get("range"),rangeMatch=rangeHeader?.match(/^bytes=(\d+)-(\d*)$/);
+      const r2Range=rangeMatch?{offset:Number(rangeMatch[1]),length:rangeMatch[2]?Number(rangeMatch[2])-Number(rangeMatch[1])+1:undefined}:undefined;
+      const object=await env.RADIO_BUCKET.get(key,r2Range?{range:r2Range}:{});
+      if(!object)return Response.json({error:"not_found"},{status:404});
+      const headers={"content-type":object.httpMetadata?.contentType||"application/octet-stream","cache-control":"private, max-age=60","content-disposition":"inline","accept-ranges":"bytes"};
+      if(r2Range&&object.range){headers["content-range"]=`bytes ${object.range.offset}-${object.range.offset+object.range.length-1}/${object.size}`;return new Response(object.body,{status:206,headers});}
+      return new Response(object.body,{headers});
+    }
+    const partySocketMatch=url.pathname.match(/^\/api\/v1\/party-rooms\/([0-9a-fA-F-]{36})\/socket$/);
+    if(partySocketMatch){
+      if(request.headers.get("Upgrade")?.toLowerCase()!=="websocket")return Response.json({error:"websocket_upgrade_required"},{status:426});
+      const claims=await anonymousClaims(request,env,webSocketToken(request));if(!claims)return Response.json({error:"invalid_anonymous_session"},{status:401});
+      const accountToken=url.searchParams.get("accountToken"),accountRequest=accountToken?new Request(request.url,{headers:{authorization:`Bearer ${accountToken}`}}):null,account=accountRequest?await verifySupabaseUser(accountRequest,env):null;
+      const id=env.PARTY_ROOM.idFromName(partySocketMatch[1]);
+      const internal=new URL(`https://party-room.internal${url.pathname}`),headers=new Headers(request.headers);internal.searchParams.set("participantId",claims.sub);if(account)internal.searchParams.set("accountUserId",account.id);if(url.searchParams.get("isHost")==="1")internal.searchParams.set("isHost","1");if(url.searchParams.get("roomType"))internal.searchParams.set("roomType",url.searchParams.get("roomType"));headers.delete("authorization");return env.PARTY_ROOM.get(id).fetch(new Request(internal,{method:"GET",headers}));
+    }
     const match = url.pathname.match(/^\/api\/v1\/chat\/([a-zA-Z0-9_-]{8,80})\/socket$/);
     if (match) {
       if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return Response.json({ error: "websocket_upgrade_required" }, { status: 426 });
@@ -129,5 +419,5 @@ async function handleRequest(request, env) {
     }
     return Response.json({ error: "not_found" }, { status: 404 });
   }
-export default {async fetch(request,env){const origin=allowedOrigin(request,env);if(origin===false)return secureResponse(Response.json({error:"origin_not_allowed"},{status:403}),request,env);if(request.method==="OPTIONS"){const response=new Response(null,{status:204,headers:{"access-control-allow-methods":"GET, POST, PUT, DELETE, OPTIONS","access-control-allow-headers":"authorization, x-account-authorization, content-type, x-event-id","access-control-max-age":"86400"}});return secureResponse(response,request,env);}try{const url=new URL(request.url),hasApiBody=["POST","PUT","DELETE"].includes(request.method)&&request.body&&url.pathname!=="/api/v1/payments/webhook";if(hasApiBody){const body=await readTextBody(request,MAX_API_BODY_BYTES);request=new Request(request.url,{method:request.method,headers:request.headers,body});}return secureResponse(await handleRequest(request,env),request,env);}catch(error){if(error.message==="payload_too_large")return secureResponse(Response.json({error:error.message},{status:413}),request,env);const requestId=crypto.randomUUID();console.error("Unhandled request error",{requestId,name:error?.name});return secureResponse(Response.json({error:"internal_error",requestId},{status:500}),request,env);}}};
-export { AnonymousIdentityShard,ChatSession,DeviceOwnershipShard,MatchmakingShard,PresenceShard,RateLimitShard };
+export default {async scheduled(event,env,ctx){const games=new GamesService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch});ctx.waitUntil(games.drawDueJackpotRounds().catch(error=>console.error("jackpot_draw_failed",error.message)));ctx.waitUntil(games.settleDueTriviaRounds().catch(error=>console.error("trivia_settle_failed",error.message)));},async fetch(request,env){const origin=allowedOrigin(request,env);if(origin===false)return secureResponse(Response.json({error:"origin_not_allowed"},{status:403}),request,env);if(request.method==="OPTIONS"){const response=new Response(null,{status:204,headers:{"access-control-allow-methods":"GET, POST, PUT, DELETE, OPTIONS","access-control-allow-headers":"authorization, x-account-authorization, content-type, x-event-id","access-control-max-age":"86400"}});return secureResponse(response,request,env);}try{const url=new URL(request.url),hasApiBody=["POST","PUT","DELETE"].includes(request.method)&&request.body&&url.pathname!=="/api/v1/payments/webhook"&&!/\/radio\/tracks$/.test(url.pathname)&&url.pathname!=="/api/v1/admin/radio/tracks";if(hasApiBody){const body=await readTextBody(request,MAX_API_BODY_BYTES);request=new Request(request.url,{method:request.method,headers:request.headers,body});}return secureResponse(await handleRequest(request,env),request,env);}catch(error){if(error.message==="payload_too_large")return secureResponse(Response.json({error:error.message},{status:413}),request,env);const requestId=crypto.randomUUID();console.error("Unhandled request error",{requestId,name:error?.name});return secureResponse(Response.json({error:"internal_error",requestId},{status:500}),request,env);}}};
+export { AnonymousIdentityShard,ChatSession,DeviceOwnershipShard,MatchmakingShard,PartyRoomShard,PresenceShard,RateLimitShard,ListenerRegistryShard };

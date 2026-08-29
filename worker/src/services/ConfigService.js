@@ -4,7 +4,7 @@ import { normalizeFlags } from "../policies/flagPolicy.js";
 import { normalizeVideoConfig } from "../policies/videoPolicy.js";
 let cachedAds=null,adsCachedUntil=0,cachedVirtual=null,virtualCachedUntil=0,cachedFlags=null,flagsCachedUntil=0,cachedVideo=null,videoCachedUntil=0;
 export class ConfigService{
-  constructor(env,fetcher=fetch){this.env=env;this.fetcher=fetcher}
+  constructor(env,fetcher=fetch){this.env=env;this.fetcher=(...args)=>fetcher(...args)}
   headers(){return{apikey:this.env.SUPABASE_SERVICE_ROLE_KEY,authorization:`Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`,"content-type":"application/json"}}
   async row(key){const response=await this.fetcher(`${this.env.SUPABASE_URL}/rest/v1/app_config?key=eq.${key}&select=value,version,updated_at&limit=1`,{headers:this.headers()});if(!response.ok)throw new Error(`${key}_config_lookup_failed`);const [row]=await response.json();if(!row)throw new Error(`${key}_config_missing`);return row}
   async ads(now=Date.now()){if(cachedAds&&adsCachedUntil>now)return cachedAds;const row=await this.row("ads");cachedAds={config:normalizeAdConfig(row.value),version:row.version,updatedAt:row.updated_at};adsCachedUntil=now+30000;return cachedAds}

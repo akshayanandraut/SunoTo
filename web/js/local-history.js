@@ -1,5 +1,5 @@
 const DB_NAME = "random-chat-local";
-const VERSION = 1;
+const VERSION = 2;
 
 function openDatabase() {
   return new Promise((resolve, reject) => {
@@ -8,6 +8,7 @@ function openDatabase() {
       const db = request.result;
       if (!db.objectStoreNames.contains("conversations")) db.createObjectStore("conversations", { keyPath: "id" });
       if (!db.objectStoreNames.contains("favourites")) db.createObjectStore("favourites", { keyPath: "peerId" });
+      if (!db.objectStoreNames.contains("radioSubmissions")) db.createObjectStore("radioSubmissions", { keyPath: "id" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -32,5 +33,8 @@ export const localHistory = {
   clearAllConversations: () => transact("conversations", "readwrite", store => store.clear()),
   listFavourites: () => transact("favourites", "readonly", store => store.getAll()),
   saveFavourite: favourite => transact("favourites", "readwrite", store => store.put(favourite)),
-  clearFavourites: () => transact("favourites", "readwrite", store => store.clear())
+  clearFavourites: () => transact("favourites", "readwrite", store => store.clear()),
+  listRadioSubmissions: async () => (await transact("radioSubmissions", "readonly", store => store.getAll())).sort((a,b) => b.savedAt.localeCompare(a.savedAt)),
+  saveRadioSubmission: submission => transact("radioSubmissions", "readwrite", store => store.put(submission)),
+  clearRadioSubmission: id => transact("radioSubmissions", "readwrite", store => store.delete(id))
 };

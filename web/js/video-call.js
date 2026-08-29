@@ -11,17 +11,35 @@ export class VideoCallClient{
     this.pc=null;
     this.localStream=null;
     this.active=false;
+    this.videoDeviceId=null;
+    this.audioDeviceId=null;
+  }
+  mediaConstraints(){
+    return {video:this.videoDeviceId?{deviceId:{exact:this.videoDeviceId}}:true,audio:this.audioDeviceId?{deviceId:{exact:this.audioDeviceId}}:true};
   }
   async start(){
     if(this.active)return;
     this.active=true;
-    this.localStream=await this.getUserMediaImpl({video:true,audio:true});
+    this.localStream=await this.getUserMediaImpl(this.mediaConstraints());
     this.onLocalStream(this.localStream);
     this.pc=this.createPeerConnection();
     for(const track of this.localStream.getTracks())this.pc.addTrack(track,this.localStream);
     const offer=await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
     this.send("VIDEO_OFFER",{sdp:offer.sdp});
+  }
+  async switchDevice({videoDeviceId,audioDeviceId}={}){
+    if(!this.active)return;
+    if(videoDeviceId!==undefined)this.videoDeviceId=videoDeviceId;
+    if(audioDeviceId!==undefined)this.audioDeviceId=audioDeviceId;
+    const nextStream=await this.getUserMediaImpl(this.mediaConstraints());
+    for(const track of nextStream.getTracks()){
+      const sender=this.pc?.getSenders().find(item=>item.track&&item.track.kind===track.kind);
+      if(sender)await sender.replaceTrack(track);
+    }
+    for(const track of this.localStream?.getTracks()||[])track.stop();
+    this.localStream=nextStream;
+    this.onLocalStream(this.localStream);
   }
   createPeerConnection(){
     const pc=new this.RTCPeerConnectionImpl({iceServers:ICE_SERVERS});

@@ -12,7 +12,8 @@ describe("Supabase account verification",()=>{
 
 describe("username rules",()=>{
   it("accepts only 3–24 letters, numbers, and underscores",()=>{assert.equal(validUsername("QuietRiver_42"),true);assert.equal(validUsername("no spaces"),false);assert.equal(validUsername("ab"),false);});
-  it("enforces three changes and a thirty-day cooldown",()=>{const now=Date.parse("2026-08-24T00:00:00Z");assert.equal(usernameChangeDecision({username:null},now).allowed,true);assert.equal(usernameChangeDecision({username:"one",usernameChangeCount:3,usernameChangedAt:"2026-01-01T00:00:00Z"},now).reason,"username_change_limit_reached");assert.equal(usernameChangeDecision({username:"one",usernameChangeCount:1,usernameChangedAt:"2026-08-20T00:00:00Z"},now).reason,"username_change_cooldown");});
+  it("enforces three changes and a thirty-day cooldown",()=>{const now=Date.parse("2026-08-24T00:00:00Z");assert.equal(usernameChangeDecision({isPremium:true,username:null},now).allowed,true);assert.equal(usernameChangeDecision({isPremium:true,username:"one",usernameChangeCount:3,usernameChangedAt:"2026-01-01T00:00:00Z"},now).reason,"username_change_limit_reached");assert.equal(usernameChangeDecision({isPremium:true,username:"one",usernameChangeCount:1,usernameChangedAt:"2026-08-20T00:00:00Z"},now).reason,"username_change_cooldown");});
+  it("blocks free (non-premium) users from setting a username at all",()=>{assert.equal(usernameChangeDecision({isPremium:false,username:null}).reason,"premium_required");assert.equal(usernameChangeDecision({},Date.now()).reason,"premium_required");});
 });
 
 describe("newest-device ownership",()=>{

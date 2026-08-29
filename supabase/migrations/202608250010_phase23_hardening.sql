@@ -62,6 +62,6 @@ begin
   select to_jsonb(r) into after_row from public.account_deletion_requests r where id=target_id;insert into public.admin_audit(admin_user_id,action,target_type,target_ref,before_value,after_value) values(admin_id,'deletion.'||new_status,'account_deletion_request',target_id::text,before_row,after_row);return after_row;
 end;$$;
 
-revoke all on function public.request_account_deletion(uuid,text),function public.cleanup_operational_retention(),function public.admin_update_grievance(uuid,uuid,text),function public.admin_update_deletion_request(uuid,uuid,text,text) from public,anon,authenticated;
-grant execute on function public.request_account_deletion(uuid,text),function public.cleanup_operational_retention(),function public.admin_update_grievance(uuid,uuid,text),function public.admin_update_deletion_request(uuid,uuid,text,text) to service_role;
+revoke all on function public.request_account_deletion(uuid,text),public.cleanup_operational_retention(),public.admin_update_grievance(uuid,uuid,text),public.admin_update_deletion_request(uuid,uuid,text,text) from public,anon,authenticated;
+grant execute on function public.request_account_deletion(uuid,text),public.cleanup_operational_retention(),public.admin_update_grievance(uuid,uuid,text),public.admin_update_deletion_request(uuid,uuid,text,text) to service_role;
 grant insert on public.grievances to service_role;

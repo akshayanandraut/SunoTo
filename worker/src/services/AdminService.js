@@ -1,5 +1,5 @@
 export class AdminService{
-  constructor(env,fetcher=fetch){this.env=env;this.fetcher=fetcher}
+  constructor(env,fetcher=fetch){this.env=env;this.fetcher=(...args)=>fetcher(...args)}
   headers(extra={}){return{apikey:this.env.SUPABASE_SERVICE_ROLE_KEY,authorization:`Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`,"content-type":"application/json",...extra}}
   async request(path,options={}){const response=await this.fetcher(`${this.env.SUPABASE_URL}/rest/v1${path}`,{...options,headers:this.headers(options.headers)}),data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.message||"admin_query_failed");return data}
   rpc(name,body={}){return this.request(`/rpc/${name}`,{method:"POST",body:JSON.stringify(body)})}
@@ -19,4 +19,14 @@ export class AdminService{
   wallet({adminId,userId,delta,reason,operationId}){return this.rpc("admin_adjust_wallet",{admin_id:adminId,target_user_id:userId,credit_delta:delta,ledger_reason:reason,operation_id:operationId})}
   restrict({adminId,targetRef,status,reason}){return this.rpc("admin_set_restriction",{admin_id:adminId,target:targetRef,new_status:status,restriction_reason:reason})}
   savePromotion({adminId,type,payload}){return this.rpc("admin_save_promotion",{admin_id:adminId,promotion_type:type,payload})}
+  setPremium({adminId,userId,premium}){return this.rpc("admin_set_premium",{admin_id:adminId,target_user_id:userId,premium})}
+  gamesRevenue(limit=100){return this.request(`/platform_revenue_ledger?select=id,source,credits_amount,reason,metadata,created_at&order=created_at.desc&limit=${limit}`)}
+  gamesRounds(gameType,limit=100){const filter=gameType?`&game_type=eq.${encodeURIComponent(gameType)}`:"";return this.request(`/game_rounds?select=id,game_type,user_id,stake_credits,payout_credits,outcome,created_at&order=created_at.desc&limit=${limit}${filter}`)}
+  jackpotRounds(limit=50){return this.request(`/jackpot_rounds?select=id,opens_at,closes_at,status,total_tickets,pool_credits,winner_user_id,payout_credits,house_take_credits,drawn_at&order=id.desc&limit=${limit}`)}
+  triviaRounds(limit=50){return this.request(`/daily_trivia_rounds?select=id,trivia_date,entry_credits,closes_at,status,entrant_count,pool_credits,payout_credits,house_take_credits,settled_at&order=id.desc&limit=${limit}`)}
+  wheelSegments(){return this.request("/wheel_segments?select=id,label,weight_bp,multiplier_bp&order=id.asc")}
+  updateWheelSegments({adminId,segments}){return this.rpc("admin_update_wheel_segments",{admin_id:adminId,segments})}
+  scheduledTriviaQuestions(limit=20){return this.request(`/daily_trivia_scheduled_questions?select=trivia_date,questions,created_at&order=trivia_date.desc&limit=${limit}`)}
+  scheduleTriviaQuestions({adminId,triviaDate,questions}){return this.rpc("admin_schedule_trivia_questions",{admin_id:adminId,target_date:triviaDate,questions})}
+  setRadioArtistLinks({adminId,roomPublicId,spotifyUrl,appleMusicUrl}){return this.rpc("admin_set_radio_artist_links",{admin_id:adminId,target_room_public_id:roomPublicId,spotify_url:spotifyUrl,apple_music_url:appleMusicUrl})}
 }
