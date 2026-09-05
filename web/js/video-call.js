@@ -41,6 +41,9 @@ export class VideoCallClient{
     this.localStream=nextStream;
     this.onLocalStream(this.localStream);
   }
+  setTrackEnabled(kind,enabled){
+    for(const track of this.localStream?.getTracks()||[])if(track.kind===kind)track.enabled=enabled;
+  }
   createPeerConnection(){
     const pc=new this.RTCPeerConnectionImpl({iceServers:ICE_SERVERS});
     pc.addEventListener("icecandidate",event=>{if(event.candidate)this.send("VIDEO_ICE_CANDIDATE",{candidate:event.candidate.toJSON()});});

@@ -20,6 +20,9 @@ export class AdminService{
   restrict({adminId,targetRef,status,reason}){return this.rpc("admin_set_restriction",{admin_id:adminId,target:targetRef,new_status:status,restriction_reason:reason})}
   savePromotion({adminId,type,payload}){return this.rpc("admin_save_promotion",{admin_id:adminId,promotion_type:type,payload})}
   setPremium({adminId,userId,premium}){return this.rpc("admin_set_premium",{admin_id:adminId,target_user_id:userId,premium})}
+  grantPremiumDays({adminId,userId,days}){return this.rpc("admin_grant_premium_days",{admin_id:adminId,target_user_id:userId,days})}
+  expirePremiumMemberships(){return this.rpc("expire_premium_memberships")}
+  runAutoDebitPremiumSweep(){return this.rpc("run_auto_debit_premium_sweep")}
   gamesRevenue(limit=100){return this.request(`/platform_revenue_ledger?select=id,source,credits_amount,reason,metadata,created_at&order=created_at.desc&limit=${limit}`)}
   gamesRounds(gameType,limit=100){const filter=gameType?`&game_type=eq.${encodeURIComponent(gameType)}`:"";return this.request(`/game_rounds?select=id,game_type,user_id,stake_credits,payout_credits,outcome,created_at&order=created_at.desc&limit=${limit}${filter}`)}
   jackpotRounds(limit=50){return this.request(`/jackpot_rounds?select=id,opens_at,closes_at,status,total_tickets,pool_credits,winner_user_id,payout_credits,house_take_credits,drawn_at&order=id.desc&limit=${limit}`)}
@@ -29,4 +32,18 @@ export class AdminService{
   scheduledTriviaQuestions(limit=20){return this.request(`/daily_trivia_scheduled_questions?select=trivia_date,questions,created_at&order=trivia_date.desc&limit=${limit}`)}
   scheduleTriviaQuestions({adminId,triviaDate,questions}){return this.rpc("admin_schedule_trivia_questions",{admin_id:adminId,target_date:triviaDate,questions})}
   setRadioArtistLinks({adminId,roomPublicId,spotifyUrl,appleMusicUrl}){return this.rpc("admin_set_radio_artist_links",{admin_id:adminId,target_room_public_id:roomPublicId,spotify_url:spotifyUrl,apple_music_url:appleMusicUrl})}
+  createRadioChannel({name}){return this.rpc("admin_create_radio_channel",{target_name:name})}
+  statsSnapshots(limit=48){return this.request(`/realtime_stats_snapshots?select=id,captured_at,sections,ad_stats&order=captured_at.desc&limit=${limit}`)}
+  privateAds(slot){const filter=slot?`&slot=eq.${encodeURIComponent(slot)}`:"";return this.request(`/private_ads?select=*&order=slot.asc,updated_at.desc${filter}`)}
+  createPrivateAd({slot,title,imageUrl,targetUrl,active}){return this.request("/private_ads",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({slot,title:title||"",image_url:imageUrl,target_url:targetUrl,active:active!==false})})}
+  updatePrivateAd({id,slot,title,imageUrl,targetUrl,active}){const patch={updated_at:new Date().toISOString()};if(slot!==undefined)patch.slot=slot;if(title!==undefined)patch.title=title;if(imageUrl!==undefined)patch.image_url=imageUrl;if(targetUrl!==undefined)patch.target_url=targetUrl;if(active!==undefined)patch.active=active;return this.request(`/private_ads?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{prefer:"return=representation"},body:JSON.stringify(patch)})}
+  deletePrivateAd(id){return this.request(`/private_ads?id=eq.${encodeURIComponent(id)}`,{method:"DELETE"})}
+  sportMatches(limit=100){return this.request(`/sport_matches?select=*&order=starts_at.desc&limit=${limit}`)}
+  createSportMatch({sport,homeTeam,awayTeam,startsAt}){return this.request("/sport_matches",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({sport,home_team:homeTeam,away_team:awayTeam,starts_at:startsAt||null})})}
+  updateSportMatch({id,status}){return this.request(`/sport_matches?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:{prefer:"return=representation"},body:JSON.stringify({status})})}
+  sportMarkets(matchId){return this.request(`/sport_markets?select=*,sport_market_outcomes(id,label,pool_credits)&match_id=eq.${encodeURIComponent(matchId)}&order=created_at.asc`)}
+  createSportMarket({matchId,marketType,description,closesAt,outcomeLabels}){return this.rpc("admin_create_sport_market",{target_match_id:matchId,target_market_type:marketType,target_description:description||"",target_closes_at:closesAt||null,target_outcome_labels:outcomeLabels})}
+  closeSportMarket(id){return this.rpc("close_sport_market",{target_market_id:id})}
+  voidSportMarket(id){return this.rpc("void_sport_market",{target_market_id:id})}
+  settleSportMarket({id,winningOutcomeId}){return this.rpc("settle_sport_market",{target_market_id:id,target_winning_outcome_id:winningOutcomeId})}
 }
