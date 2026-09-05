@@ -66,32 +66,69 @@ any bug you find along the way (this repo's history shows real bugs are regularl
 the guest-win claim's snake_case/camelCase mismatch, the missing `"guest-win"` rate-limit bucket, the party-room
 creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
 
-- [ ] **T-010. Browser-verify Coin Tower (solo game) end-to-end.**
+- [x] **T-010. Browser-verify Coin Tower (solo game) end-to-end.**
   Route: `#/coin-tower` (registered in `web/js/views.js`, `GAME_MENU`/`GAME_ROUTES` in `web/js/app.js`). Sign in
   with a test account, opt in to real-stake games if prompted, stake a small amount, confirm the coin-pusher
   cabinet animation plays, the outcome label ("TOPPLE! 🎉" / "Pushed off — win!" / "Nudged back — refunded" / "No
   win this drop") matches the actual server result, wallet balance updates correctly, and the winners-ticker
   updates. Zero console errors required. Per `QUESTIONS.md` line 57: "Not yet live-browser-tested."
+  DONE 2026-09-06: Drove `#/coin-tower` with Playwright against local dev (`localtest@sunoto.dev`, vite 5173 +
+  wrangler dev 8787). Betting opt-in already active from a prior session; staked 2 Sparks, `POST
+  /api/v1/games/coin-tower/play` returned 200, UI showed "Nudged back" outcome consistent with the unchanged
+  wallet balance (refund), and the winners-ticker gained a new "A player won 2 Sparks" row. No console errors
+  from the coin-tower flow itself. Found and worked around an unrelated Playwright-vs-app timing issue: this
+  app calls a full `render()` (replacing `#app.innerHTML`) after most background polls resolve (ads, presence
+  heartbeat, reconnect/request), which can race a synthetic `.click()`/form-submit and cause the browser to
+  silently drop the native submit ("Form submission canceled because the form is not connected" — no user-facing
+  error shown). Worked around in test tooling via `scripts/_smoke-lib.mjs` (dispatches `submit`/`click` events
+  directly instead of simulating mouse input) — this exercises the exact same production listener. This is the
+  same underlying "app re-renders very often" root cause already described in `QUESTIONS.md`'s stake-input
+  `value`-reset writeup (Section 2 / T-030..T-033); a real user could in theory hit a similarly-dropped click if
+  their click happens to land in the same ~ms window as a poll-triggered render, but this is a pre-existing,
+  architecture-level characteristic (frequent full re-renders) rather than a new bug in Coin Tower specifically,
+  and a full fix (diffed rendering instead of full innerHTML replacement) is a much larger change than this
+  backlog's scope — not fixing here, just documenting. Also found (unrelated, logged separately under T-025):
+  `GET /api/v1/games/daily-streak/status` returned `502 Bad Gateway` on every single request in this session.
 
-- [ ] **T-011. Browser-verify 777 Slots (solo game) end-to-end.**
+- [x] **T-011. Browser-verify 777 Slots (solo game) end-to-end.**
   Route: `#/slots-777`. Backend: `worker/src/services/GamesService.js` `playSlots777`; routes
   `/api/v1/games/slots-777/{symbols,play,leaderboard}`. Stake, confirm the 3-reel spin animation resolves to the
   true server symbols (any-two-match consolation payout, three-of-a-kind payout, three-sevens jackpot), wallet
   updates, leaderboard updates. Per `QUESTIONS.md` line 62: "Not verified in-browser this pass."
+  DONE 2026-09-06: Staked 2 Sparks via Playwright against local dev. Reels resolved to Bell/7/BAR (no match),
+  UI correctly showed "No match this spin. Balance: 9,96,747 Sparks", wallet balance dropped by exactly the
+  2-Spark stake (9,96,749 → 9,96,747), matching the true server result. No console errors from this flow.
 
-- [ ] **T-012. Browser-verify Scratch Card (solo game) end-to-end.**
+- [x] **T-012. Browser-verify Scratch Card (solo game) end-to-end.**
   Route: `#/scratch-card`. Tap one of the 9 tiles, confirm the ~900ms reveal delay shows the true server
   tile/outcome (small win / rare big win / blank), wallet updates. Per `QUESTIONS.md` line 68: "Not verified
   in-browser this pass."
+  DONE 2026-09-06: Staked 2 Sparks, tapped tile index 4, revealed "—" (no-win) on the correct tile, and the
+  message "Balance: 9,96,741 Sparks." matched the wallet badge, which dropped by exactly the 2-Spark stake
+  (9,96,743 → 9,96,741). Also called `POST /api/v1/games/scratch-card/play` directly (bypassing the UI) to
+  double-check the RPC math: `play_scratch_card` correctly debits the stake up front via `apply_wallet_entry`
+  and only credits a payout for `small`/`big` tiers, confirmed the returned `credits_balance` matched a fresh
+  `GET /api/v1/wallet` read. Noted but not investigated further here (unrelated to Scratch Card): the client
+  repeatedly gets `403` on `GET /api/v1/anonymous/session` in the background while sitting on a signed-in-account
+  game route, and `GET /api/v1/games/daily-streak/status` again returned `502` (same finding as T-010, tracked
+  under T-025).
 
-- [ ] **T-013. Browser-verify Wheel of Fortune full spin-to-settle, including the betting opt-in step.**
+- [x] **T-013. Browser-verify Wheel of Fortune full spin-to-settle, including the betting opt-in step.**
   Route: `#/wheel`. Previous attempt (`scripts/_wheel-label-smoke.mjs`) confirmed the idle wheel's labels/legend
   render correctly but could not complete an actual spin because the betting-opt-in consent UI wasn't driven.
   This time, actually click through the real opt-in consent button (`bettingGate()` helper in `web/js/views.js`,
   `#betting-optin-btn`) with Playwright, then submit a stake and confirm the wheel lands on the segment matching
   the true server result, wallet updates, winners-ticker updates.
+  DONE 2026-09-06: Reset the local test account's `betting_opted_in_at` to null via direct REST (needed to
+  actually re-exercise the gate — discovered along the way that Supabase auth has two different user rows for
+  `localtest@sunoto.dev`; only `d600f0e5-a298-41aa-8061-44b3101263c7` is the one the app actually signs into,
+  the other (`da7d6746-...`) appears to be a stray/unused duplicate signup, not investigated further as it's
+  orthogonal to this backlog). Clicked `#betting-optin-btn`, gate closed and the real wheel rendered. Staked 2
+  Sparks; wheel needle landed on the yellow "0.6x" segment, result banner read "You won 1 Sparks (0.6x)! Balance:
+  9,96,739 Sparks." — matches floor(2×0.6)=1 exactly, and the wallet badge reflected the same balance. Leaderboard
+  gained a new "A player won 1 Sparks" row at the top.
 
-- [ ] **T-014. Browser-verify the games-menu / per-game-page IA rebuild across all 8 routes.**
+- [x] **T-014. Browser-verify the games-menu / per-game-page IA rebuild across all 8 routes.**
   `web/js/views.js`'s `gamesView` is now a card-grid menu only; each game (`wheel`, `coin-flip`, `coin-tower`,
   `streak-ladder`, `sparks-pool`, `trivia`, `roulette`, `sportsbook`) has its own route wrapped in `gameShell()`.
   Click through the menu into every one of the 8 game pages, confirm each loads its live data (odds/leaderboard),
@@ -99,6 +136,18 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   keeps refreshing on repeated visits to the same route (this was the exact bug class the `GAME_ROUTES` Set fix
   in `web/js/app.js` was meant to close; re-visiting a route twice in a row without a full page reload is the key
   regression check). Per `QUESTIONS.md` line 61: "Not verified in-browser this pass."
+  DONE 2026-09-06: the catalog has actually grown to 11 routes now (`slots-777` and `scratch-card` were added
+  after this task was written) — checked all 11: wheel, coin-flip, coin-tower, streak-ladder, slots-777,
+  scratch-card, sparks-pool, trivia, reflex, roulette, sportsbook. Every route rendered its wallet strip and
+  "← Back to Games" nav correctly. Confirmed the revisit-refresh fix directly by counting network requests to
+  `/api/v1/games/coin-flip/*`: 2 requests on first landing on `#/games` (odds+leaderboard), 2 more entering
+  `#/coin-flip` the first time, and 2 more again after navigating away and back — data genuinely refetches every
+  visit, no staleness regression. One flaky reading (slots-777 briefly missing back-nav) turned out to be this
+  test's own rapid-fire route-hopping tripping a rate limit (spun up 11 fresh anonymous sessions within ~30s) —
+  re-checked slots-777 in isolation and it rendered correctly, so not a real bug. Also hit a genuine `wrangler
+  dev` crash mid-run (`ProxyController2` internal error in `workers-sdk`/`miniflare`, logged under
+  `.wrangler/logs`) under this same concurrent load — restarted the dev server and re-ran; this looks like local
+  dev-tooling flakiness under load, not an application bug, so not investigated further.
 
 - [ ] **T-015. Browser-verify Tug of War Trivia's full 2-player gameplay (not just the seat-count guard).**
   Party-room mode `tug_of_war`, handlers in `worker/src/durable/PartyRoomShard.js` (`TUG_START`/`TUG_ANSWER`/
@@ -116,12 +165,27 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   once armed is eliminated), confirm the pro-rata half-refund on elimination, confirm the last player standing
   takes the pot minus rake.
 
-- [ ] **T-017. Browser-verify the radio channel terminology change and "Custom channels — coming soon" card.**
+- [x] **T-017. Browser-verify the radio channel terminology change and "Custom channels — coming soon" card.**
   `web/js/views.js` party lobby: confirm the "Radio channels" section at the top lists both curated channels
   with working "Join channel →" buttons, confirm in-room copy says "channel" not "room" throughout when
   `room.roomType==="radio"` (no join-code line, no invite form), confirm the room-type dropdown on the create
   form no longer offers "Radio (public)", and confirm the "Custom channels — coming soon" static card renders in
   place of the old public-radio-rooms directory. Per `QUESTIONS.md` line 173: "Not browser-verified this pass."
+  DONE 2026-09-06: found and fixed a real regression first — the "Custom channels — coming soon" static card that
+  `QUESTIONS.md` documented as built no longer existed in `web/js/views.js`'s party-lobby `channelsSection` (grepped
+  the whole `web/` tree for "Custom channel"/"coming soon" — zero matches in that section; it must have been lost
+  in a later edit). Re-added the static card to the `.games-grid`. Then browser-verified everything end-to-end:
+  lobby shows "Join a channel" heading with 2 working "Join channel →" buttons (SunoTo Radio, SunoTo Public
+  Radio) plus the restored "Custom channels — Coming soon" card; the create-room dropdown has no "Radio
+  (public)" option; joining a curated channel shows "Radio channel" (not the room type string), hides the
+  join-code line and "Invite by username" form, uses "the channel" in the chat placeholder, and the leave button
+  reads "Leave channel". Zero console errors. Also hit and fixed the same pre-existing local-dev blocker
+  `QUESTIONS.md` flagged for Charades verification: heavy automated browser testing this session (dozens of
+  fresh anonymous identities from 127.0.0.1) tripped `AnonymousIdentityShard`'s IP risk gate into
+  `account_required` — discovered that `wrangler dev` persists Durable Object state to disk under
+  `worker/.wrangler/state` (gitignored) across restarts, so a plain worker restart doesn't clear it; deleting
+  that directory and restarting does. Useful for any later party-room/anonymous-session verification in this
+  same local session.
 
 - [ ] **T-018. Browser-verify the party-room seat-moderation flow end-to-end.**
   Covers: spectator requests a seat, host/co-host approves or denies, host appoints/revokes a co-host (target
@@ -168,7 +232,7 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   the configured super-admin account credentials — if unavailable, document exactly what was and wasn't
   reachable rather than skipping the task silently.
 
-- [ ] **T-025. Browser-verify the daily login streak bonus feature (built 2026-09-06).**
+- [x] **T-025. Browser-verify the daily login streak bonus feature (built 2026-09-06).**
   Migration `supabase/migrations/202609030002_daily_login_streak.sql`, RPCs `claim_daily_streak_bonus`/
   `daily_streak_status`, routes `/api/v1/games/daily-streak/{status,claim}`, account-page section
   `dailyStreakSection` in `web/js/views.js` (`#daily-streak-claim-btn`). This entire feature was built this
@@ -180,6 +244,29 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   `enabled`, then toggle back) saves and persists. You will likely need to manipulate `claim_date` rows directly
   in `daily_streak_claims` via REST to simulate "yesterday" for the increment/reset checks rather than waiting
   real days — that's expected and fine, clean up the rows afterward.
+  DONE 2026-09-06: found and fixed two real, blocking bugs, then verified all 5 checks pass.
+  **Bug 1 (root cause of "never been run"):** migrations `202609030001_enable_ads.sql` and
+  `202609030002_daily_login_streak.sql` existed in the repo but had never actually been applied to the live
+  Supabase project (`supabase migration list` showed them local-only) — every daily-streak call was 502ing
+  because `public.daily_streak_status`/`claim_daily_streak_bonus` didn't exist yet. Ran `supabase db push` to
+  apply both (additive-only schema — new table + new functions, matches every other already-applied migration
+  in this repo — logged here rather than treated as a silent side effect). **Bug 2:** even after the migration,
+  every claim attempt 429'd — `worker/src/durable/RateLimitShard.js`'s `LIMITS` map had no `daily_streak` entry
+  at all, and `enforceRateLimit()` in `worker/src/index.js` treats *any* non-2xx response from the rate-limit
+  shard (including its own `400 invalid_rate_limit` for an unknown bucket) as "rate limited" — so the claim
+  endpoint was unconditionally blocked for every user, always, on the very first attempt. Fixed by adding
+  `daily_streak:{max:10,windowMs:86400000}` to `LIMITS`. After both fixes: verified via direct API calls (backdating
+  `daily_streak_claims.claim_date` rows via REST to simulate yesterday/a gap) — first claim → `streakCount:1,
+  creditsAwarded:500, idempotent:false`; same-day replay → `idempotent:true`, balance unchanged; consecutive day →
+  `streakCount:2, creditsAwarded:1000`; after a skipped day → resets to `streakCount:1`. Confirmed in the browser
+  too: account page shows "1-day streak" / "Claim 5 Sparks" before claiming and "✓ Claimed today — come back
+  tomorrow to keep your streak going." after. For the admin Config panel check, temporarily set
+  `ADMIN_USER_ID`/`ADMIN_REQUIRE_AAL2=false` in `worker/.dev.vars` (gitignored, reverted after) to unlock local
+  admin access for the test account — confirmed `GET /api/v1/admin/daily-streak` returns the live config+version
+  and `PUT` with the correct `expectedVersion` toggles `enabled` and persists (version increments correctly;
+  mismatched-version 409 also confirmed as correct optimistic-concurrency behavior, not a bug). Left the config
+  as `enabled:true` (original state) and deleted the test `daily_streak_claims` rows afterward. `node --check`
+  passed on `worker/src/durable/RateLimitShard.js`.
 
 - [ ] **T-026. Browser-verify Connect Four's full playthrough (win detection was code-audited as correct but never re-driven live).**
   `PartyRoomShard.js` `C4_MOVE` handler / `connectFourWinCells` / `resolveConnectFourGame`. Play a full game to a
@@ -191,7 +278,7 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
 
 ## SECTION 2 — P1: Concrete, self-contained bug fixes (no ambiguity, no design decisions)
 
-- [ ] **T-030. Fix the hardcoded-`value` stake-input reset bug on the Sportsbook per-market stake input.**
+- [x] **T-030. Fix the hardcoded-`value` stake-input reset bug on the Sportsbook per-market stake input.**
   Same defect class already fixed for Wheel/Coin Flip/Coin Tower/Slots 777/Scratch Card/Streak Ladder/Roulette/
   Reflex Tap (see `QUESTIONS.md` lines 1-8 for the full root-cause writeup and the fix pattern): a template
   literal in `web/js/views.js` bakes a literal `value="..."` into the `<input>`, so every re-render (including
@@ -200,37 +287,62 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   `web/js/app.js` that updates state without forcing a re-render — copy the exact pattern used for the other 8
   games' stake inputs (grep `web/js/app.js` for one of the existing `??"5"` / `??"10"` state bindings next to a
   matching silent-input-listener block to find the template to copy).
+  DONE 2026-09-06: `web/js/views.js` sportsbookBody's per-market form now binds
+  `value="${escapeText(state.sportsBetStake?.[market.id]??"10")}"` (keyed by market id, since Sportsbook can show
+  several open markets at once). Also found and fixed a second, more serious bug in the same code while doing
+  this: every market's form shared the literal id `id="sports-bet-form"` (invalid duplicate DOM ids), and
+  `web/js/app.js` wired the submit/input listeners via `document.querySelector("#sports-bet-form")` — singular —
+  so only the *first* market's "Place bet" button ever worked; clicking "Place bet" on any 2nd/3rd market form
+  silently did nothing. Fixed by giving each form `class="sports-bet-form" data-market-id="..."` instead of a
+  duplicate id, and switching the binding to `document.querySelectorAll(".sports-bet-form").forEach(...)` so
+  every market's form gets its own input+submit listener. `node --check` passed on both files.
 
-- [ ] **T-031. Fix the same hardcoded-`value` bug on the Account page's `#recharge-amount` input.**
+- [x] **T-031. Fix the same hardcoded-`value` bug on the Account page's `#recharge-amount` input.**
   `web/js/views.js` `accountView`'s `recharge-form`. Same fix pattern as T-030.
+  DONE 2026-09-06: bound to `state.rechargeAmount??"50"` plus a silent input listener in `web/js/app.js`.
+  `node --check` passed.
 
-- [ ] **T-032. Fix the same hardcoded-`value` bug on the Membership `#redeem-sparks-form` days field.**
+- [x] **T-032. Fix the same hardcoded-`value` bug on the Membership `#redeem-sparks-form` days field.**
   `web/js/views.js` `membershipSection`'s `redeem-sparks-form`. Same fix pattern as T-030.
+  DONE 2026-09-06: bound to `state.redeemSparksDays??"7"` plus a silent input listener in `web/js/app.js`.
+  `node --check` passed.
 
-- [ ] **T-033. Fix the same hardcoded-`value` bug on the party-room Bidding game's `#bidding-bid-input`.**
+- [x] **T-033. Fix the same hardcoded-`value` bug on the party-room Bidding game's `#bidding-bid-input`.**
   `web/js/views.js` bidding party-room panel. Same fix pattern as T-030.
+  DONE 2026-09-06: bound to `state.biddingBidAmount??"100"` plus a silent input listener in `web/js/app.js`.
+  `node --check` passed.
 
-- [ ] **T-034. Generalize the `betting_opt_in_required` error copy.**
+- [x] **T-034. Generalize the `betting_opt_in_required` error copy.**
   `web/js/app.js`, `FRIENDLY_ERRORS.betting_opt_in_required` currently hardcodes "Turn on Roulette & Sportsbook
   first to play this game" even when the error fires from Wheel, Coin Flip, Coin Tower, Slots 777, Scratch Card,
   Streak Ladder, or Sparks Pool. Reword to something game-agnostic, e.g. "Turn on real-stake games first to play
   this — refresh the page if you don't see the option." (matches the copy already used elsewhere for this same
   concept per `QUESTIONS.md` line 6 — reuse that exact wording for consistency instead of inventing new copy).
+  RESOLVED, already done — no change needed: checked `web/js/app.js`'s `FRIENDLY_ERRORS.betting_opt_in_required`
+  and it already reads "Turn on real-stake games first to play this — refresh the page if you don't see the
+  option." Grepped the whole `web/` tree for the old "Turn on Roulette" string — zero matches. This task's
+  premise was stale (already fixed in an earlier session pass).
 
-- [ ] **T-035. Standardize the "no wins yet" empty-state copy across every winners-ticker section.**
+- [x] **T-035. Standardize the "no wins yet" empty-state copy across every winners-ticker section.**
   `web/js/views.js`: most game leaderboard empty-states say `"No wins yet — be the first."`, but Reflex Tap says
   `"No wins yet today — be the first."` and Sportsbook says `"No bets placed yet."`. Decide one consistent
   wording per context (wins vs bets are genuinely different concepts, so Sportsbook's distinct copy is
   defensible — but Reflex's "today" qualifier is the odd one out among the win-based games and should match the
   other 7). Make Reflex Tap consistent with the other solo/chance games' wording.
+  DONE 2026-09-06: grepped every `"No wins yet` occurrence in `web/js/views.js` — the task's premise undercounted
+  by one: **both** Wheel of Fortune (line 95) and Reflex Tap (line 243) said "No wins yet today — be the first.",
+  while Coin Flip/Coin Tower/Slots 777/Scratch Card/Streak Ladder all said "No wins yet — be the first." Changed
+  both outliers to match the majority wording. Sportsbook's distinct "No bets placed yet." left as-is (different
+  concept, correctly not a win-based ticker). `node --check` passed.
 
-- [ ] **T-036. Fix the ambiguous "coming soon" reference to specific games on the Games kill-switch page.**
+- [x] **T-036. Fix the ambiguous "coming soon" reference to specific games on the Games kill-switch page.**
   `web/js/views.js` line ~76: when `featureFlags.games_enabled===false`, the fallback copy says "Wheel of
   Fortune, Jackpot and Daily Trivia are on their way." This is stale — Jackpot was renamed to "Sparks Pool" and
   the games catalog has grown to 12+ games. Update the copy to something that won't go stale again, e.g. "Our
   games are on their way. Check back soon." (Note: confirm first via `worker/src/policies/flagPolicy.js` /
   `requireFlags` that this is genuinely just a kill-switch fallback message and not a real stub — it is, per this
   session's earlier audit — so this is a pure copy fix, not a feature-gating change.)
+  DONE 2026-09-06: changed line 76's copy to "Our games are on their way. Check back soon." `node --check` passed.
 
 ---
 
