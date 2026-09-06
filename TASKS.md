@@ -445,7 +445,7 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
 
 ## SECTION 4 — P2: Hardening / audits / small new admin capability
 
-- [ ] **T-050. Audit whether any stale "1 Spark = 1 ticket, max 100" Sparks Pool (Jackpot) code path still exists.**
+- [x] **T-050. Audit whether any stale "1 Spark = 1 ticket, max 100" Sparks Pool (Jackpot) code path still exists.**
   `QUESTIONS.md` has two entries dated the same day that appear to describe different states of Sparks Pool's
   ticket mechanic: one says the tap-counter rebuild (`.jackpot-tier-grid`, `state.jackpotTierCounts`) was built
   and pushed live (`202608310042_jackpot_no_ticket_cap.sql` removed the old 100-ticket cap); another, in the same
@@ -455,6 +455,12 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   `RESOLVED, already done` with the file/line evidence and check the box — no code change needed. If you somehow
   find the old typed-quantity-input flow still present instead, rebuild it per the tap-counter description in
   `QUESTIONS.md` line 59.
+  RESOLVED, ALREADY DONE 2026-09-06: The tap-counter UI is fully live and operational. Evidence: (1) `web/js/views.js`
+  lines 196-198 render `.jackpot-tier-grid` with `data-jackpot-tier="${denom}"` buttons for tiers [50, 100, 500,
+  1000, 5000]; (2) `web/js/app.js` lines 413-414 wire click handlers on `[data-jackpot-tier]` to increment
+  `state.jackpotTierCounts[denom]` and reset buttons to decrement; (3) line 415 on form submit calculates total
+  tickets from `state.jackpotTierCounts` entries (no quantity input anywhere). No stale quantity-input code path
+  remains. Migration `202608310042_jackpot_no_ticket_cap.sql` successfully removed the 100-ticket cap.
 
 - [ ] **T-051. Stricter odds non-disclosure: stop sending raw probability numbers to the client at all.**
   The house-cut copy audit (`QUESTIONS.md` line 60) removed every percentage/odds number from the *rendered* UI
