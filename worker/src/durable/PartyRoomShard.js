@@ -217,6 +217,10 @@ export class PartyRoomShard {
       this.broadcast(event("ROOM_MESSAGE", { from: attachment.participantId, text: payload.text }), socket);
       return;
     }
+    if (type === "PARTY_TYPING" && attachment.seated) {
+      this.broadcast(event("PARTY_TYPING", { participantId: attachment.participantId, typing: Boolean(payload.typing) }), socket);
+      return;
+    }
     if (type === "HOST_HEARTBEAT" && attachment.isHost) {
       const room = (await this.state.storage.get("room")) || {};
       room.hostLastActiveAt = Date.now();

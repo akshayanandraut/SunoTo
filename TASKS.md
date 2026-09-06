@@ -230,10 +230,25 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   account's user ID, then that account connecting fresh, arrives with `seated:true` in its `READY` payload with
   no `SEAT_REQUEST` needed at all.
 
-- [ ] **T-019. Browser-verify typing indicators end-to-end (1:1 chat and party chat).**
+- [x] **T-019. Browser-verify typing indicators end-to-end (1:1 chat and party chat).**
   Two-browser-context Playwright test: one participant types, confirm the other sees the typing indicator appear
   and disappear correctly in both random 1:1 chat and party-room chat. Per ROADMAP.md: "Not yet done:
   browser-verify typing indicators... end-to-end."
+  DONE 2026-09-06: **1:1 random chat** — already built (ROADMAP.md Slice 14); browser-verified with two
+  Playwright contexts matched into the same session: typer's `#peer-typing` state correctly showed on the peer
+  within ~600ms, auto-cleared after ~2s idle, and cleared immediately (plus the message actually arrived) on
+  send. **Party-room chat typing indicator did not exist at all** — grepped `PartyRoomShard.js` for any
+  `TYPING`-related handler and found none; ROADMAP.md's Slice 14 writeup, on closer reading, only ever describes
+  building this for 1:1 `ChatSession.js`, so this task's "(1:1 chat and party chat)" framing overstated what had
+  actually shipped. Built it to close the gap rather than just reporting it: added a `PARTY_TYPING` handler in
+  `worker/src/durable/PartyRoomShard.js` (gated to `attachment.seated`, same as `ROOM_MESSAGE`, and broadcast to
+  everyone but the sender), wired `web/js/app.js`'s `#party-message-input` with the identical 2s-debounce
+  pattern already used for 1:1 chat plus a `PARTY_TYPING` case in `handlePartyEvent()`, and added a
+  `#party-peer-typing` indicator element next to `#party-log` in `web/js/views.js`. Browser-verified with two
+  signed-in contexts (host creates a room, guest joins via code — guests aren't auto-seated on non-radio rooms,
+  same gate T-018 exercised, so the seated host was the one driving typing/sending while the spectating guest
+  observed): indicator appeared within ~700ms, auto-cleared after ~2.5s idle, cleared immediately on send, and
+  the message itself arrived. `node --check` passed on all three touched files.
 
 - [ ] **T-020. Browser-verify disappearing photos end-to-end.**
   Send a photo in a 1:1 chat, confirm it displays for its configured duration then actually disappears from the
