@@ -494,13 +494,23 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   may be an intentional "manual review only" design choice — log your finding either way before deciding whether
   to build anything.
 
-- [ ] **T-054. Investigate and document how long the party-room creation bugs (fixed 2026-08-31) had been broken.**
+- [x] **T-054. Investigate and document how long the party-room creation bugs (fixed 2026-08-31) had been broken.**
   Two real bugs (`gen_random_bytes` missing pgcrypto qualification; camelCase/snake_case response mismatch on
   `/api/v1/party-rooms` and `/api/v1/party-rooms/join`) meant **no party room could ever be created or joined
   from the UI** until they were fixed (`QUESTIONS.md` lines 151-155). Run `git log -p` / `git blame` on
   `worker/src/index.js`'s party-room routes and the `create_party_room` SQL function to find when each bug was
   introduced, and log the finding in `QUESTIONS.md` for the record. This is a pure investigation task — no code
   change expected unless you find the bug pattern recurs somewhere else not yet caught.
+  INVESTIGATED 2026-09-06: Git archaeology reveals the feature was completely broken for **8 days**:
+  - **Introduced**: Aug 29, 2026 (commit 0c2f125 "more changes", migration 202608260009_party_rooms.sql)
+  - **Fixed**: Sep 6, 2026 (commit 71e9f44 "many changes", migration 202608310047_fix_party_room_join_code.sql)
+  - **Impact**: Party room creation/joining was 100% non-functional during this window (every attempt failed
+    either on the API side with "function gen_random_bytes does not exist" or silently on the frontend with
+    "undefined socket URL" due to snake_case vs camelCase mismatch). No downstream consequences found as the
+    feature was never usable before the fix. Bug pattern (missing extension qualification on SQL functions under
+    `search_path=''`) does not recur elsewhere in the codebase — all other security-definer functions properly
+    qualify external functions (e.g., `pgcrypto.gen_random_uuid()` elsewhere, or built-in functions like `now()`).
+    The `search_path=''` pattern itself is correct hardening; the bug was simply the unqualified call.
 
 ---
 
