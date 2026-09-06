@@ -149,21 +149,42 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   `.wrangler/logs`) under this same concurrent load — restarted the dev server and re-ran; this looks like local
   dev-tooling flakiness under load, not an application bug, so not investigated further.
 
-- [ ] **T-015. Browser-verify Tug of War Trivia's full 2-player gameplay (not just the seat-count guard).**
+- [x] **T-015. Browser-verify Tug of War Trivia's full 2-player gameplay (not just the seat-count guard).**
   Party-room mode `tug_of_war`, handlers in `worker/src/durable/PartyRoomShard.js` (`TUG_START`/`TUG_ANSWER`/
   `TUG_STATE`/`TUG_OVER`), question bank `worker/src/policies/tugOfWarQuestions.js`. Only the "needs exactly 2
   seated players" rejection message has been verified so far (`QUESTIONS.md` line 149). This task must actually
   seat exactly 2 players, start a round, answer several rapid-fire questions correctly/incorrectly from both
   sides, confirm the rope-meter/score updates correctly, confirm first-to-5 ends the round, and confirm the pot
   payout math (stake × 2, minus 10% rake, to the winner) is correct.
+  DONE 2026-09-06: driven via a raw-WebSocket Node harness (`scripts/_party-game-harness.mjs`, same
+  bypass-the-browser approach `QUESTIONS.md` used for Charades) rather than Playwright, since real-time
+  question-timing races are far more reliable to script directly against the two participants' sockets. Created
+  2 fresh confirmed Supabase test accounts, seeded wallets, created a room, seated both (host auto-seated,
+  guest via `SEAT_REQUEST`→`SEAT_APPROVE`→`SEAT_GRANTED`), switched mode to `tug_of_war`, started with a 500-credit
+  stake. Host answered every question correctly and guest always incorrectly: scores accumulated 1→5 exactly as
+  expected across 5 rounds, `TUG_OVER` fired at the target score (5) with the correct `winnerParticipantId`, and
+  `pot:1000`. Cross-checked the real payout against `wallet_ledger`: room creation (-5000, "Party room
+  activation"), stake ante (-500), payout (+900 = floor(1000×0.9), the 10% rake) — final balance matched to the
+  credit. `node --check` passed on the two new scratch harness files (deleted after use, per repo convention).
 
-- [ ] **T-016. Browser-verify Elimination Reflex's full 3-4 player gameplay (not just the seat-count guard).**
+- [x] **T-016. Browser-verify Elimination Reflex's full 3-4 player gameplay (not just the seat-count guard).**
   Party-room mode `elimination_reflex`, handlers in `worker/src/durable/PartyRoomShard.js` (`ELIM_START`/
   `ELIM_TAP`/`ELIM_STATE`/`ELIM_OVER`), constants `ELIMINATION_REFLEX_MIN_PLAYERS=3`/`MAX_PLAYERS=4`/
   `ARM_MIN_MS`/`ARM_MAX_MS` in `worker/src/policies/partyRoomPolicy.js`. Seat 3 or 4 players, start a round,
   test both the false-start path (tap before armed → instant elimination) and the normal path (slowest tapper
   once armed is eliminated), confirm the pro-rata half-refund on elimination, confirm the last player standing
   takes the pot minus rake.
+  DONE 2026-09-06: driven with the same raw-WebSocket harness built for T-015, 3 fresh test accounts, 400-credit
+  stake (pot 1200). p3 tapped before armed → instantly eliminated with reason `false_start` and got the
+  pro-rata half-refund (200 credits: wallet 100000 → 99800). Confirmed by reading `eliminateReflexPlayer()` and
+  then by the wallet numbers that **the half-refund applies to every elimination, not just false starts** — the
+  task's own phrasing ("confirm the pro-rata half-refund on elimination") turned out to be the accurate
+  description, and I initially mis-assumed the normal/"slowest" path paid no refund, which the pot math (800 in
+  practice, not 1000) and the host's own final balance disproved; not a bug, just a broader rule than the task
+  bullet's grouping implied. Host then let the round arm and deliberately never tapped, was correctly eliminated
+  as `slowest` after the 5s tap window and also got its half-refund (94800 = 100000 − 5000 room fee − 400 stake +
+  200 refund). p2 (the only remaining player) won `ELIM_OVER` with `pot:800`, payout `floor(800×0.9)=720`,
+  final balance 100320 — matched exactly.
 
 - [x] **T-017. Browser-verify the radio channel terminology change and "Custom channels — coming soon" card.**
   `web/js/views.js` party lobby: confirm the "Radio channels" section at the top lists both curated channels
