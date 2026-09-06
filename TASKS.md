@@ -485,7 +485,7 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   party-room entries somewhere reachable in `web/js/admin.js` (there may not be a rooms list view yet — you may
   need to add one, e.g. under the existing `activityView` or a new small panel).
 
-- [ ] **T-053. Consider auto-restriction/kick logic for party-room participants who accumulate multiple reports.**
+- [x] **T-053. Consider auto-restriction/kick logic for party-room participants who accumulate multiple reports.**
   Currently a reported party-room participant just accumulates rows in the existing `reports` table for manual
   admin review — there's no automatic kick/restriction threshold like some other moderation surfaces in this app
   may have. Check whether 1:1 chat already has an automatic restriction-on-report-threshold mechanism (grep
@@ -493,6 +493,15 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   exists elsewhere, extend it to party rooms for consistency; if no such pattern exists anywhere in the app, this
   may be an intentional "manual review only" design choice — log your finding either way before deciding whether
   to build anything.
+  INVESTIGATED 2026-09-06: System tracks risk scores (migration 202608250005_phase17_safety.sql) with exponential
+  decay (recent_score = previous * 0.5^(days/30) + new_weight) and unique reporter counts, but **does NOT have
+  automatic restriction logic** tied to risk thresholds. `RestrictionService` only checks existing restrictions
+  (manual entries in the `restrictions` table), does not auto-create based on risk scores. This is an intentional
+  "manual review only" design choice confirmed by code pattern: risk tracking is built infrastructure, but the
+  app defers to admin judgment on when/whether to restrict. No auto-action pattern exists anywhere in the codebase
+  that could be extended to party rooms. Recommendation: keep current manual-review model; it's consistent with
+  the rest of the app and gives admins full context before acting. If auto-restriction becomes policy, apply it
+  uniformly across 1:1 chat + party rooms together, not just party rooms in isolation.
 
 - [x] **T-054. Investigate and document how long the party-room creation bugs (fixed 2026-08-31) had been broken.**
   Two real bugs (`gen_random_bytes` missing pgcrypto qualification; camelCase/snake_case response mismatch on
