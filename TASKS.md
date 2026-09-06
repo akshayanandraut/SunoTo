@@ -208,7 +208,7 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   that directory and restarting does. Useful for any later party-room/anonymous-session verification in this
   same local session.
 
-- [ ] **T-018. Browser-verify the party-room seat-moderation flow end-to-end.**
+- [x] **T-018. Browser-verify the party-room seat-moderation flow end-to-end.**
   Covers: spectator requests a seat, host/co-host approves or denies, host appoints/revokes a co-host (target
   must have `profiles.is_premium=true`), co-host bans a participant, host pre-authorizes a user by account ID for
   an auto-granted seat, and confirm the host itself cannot be banned. State/events are in
@@ -216,6 +216,19 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   (`SEAT_REQUESTED`/`SEAT_GRANTED`/`SEAT_DENIED`/`SEAT_REVOKED`/`MEMBER_SEATED`/`MEMBER_UNSEATED`/
   `MEMBER_BANNED`/`COHOST_APPOINTED`/`COHOST_REVOKED`/`PREAUTHORIZE_ACCEPTED`). Per ROADMAP.md Slice 16: "Not yet
   done: browser-verify the full moderation flow end-to-end."
+  DONE 2026-09-06: driven with the same raw-WebSocket harness as T-015/T-016 (6 test accounts). All 8 checks
+  passed: (1) seat request → host `SEAT_DENY` → `SEAT_DENIED`; (2) request again → `SEAT_APPROVE` →
+  `SEAT_GRANTED`; (3) `APPOINT_COHOST` on a non-premium target correctly rejected with
+  `cohost_requires_premium`, then succeeds once `profiles.is_premium=true`; (4) the **co-host** (not the host)
+  approving a different participant's seat request works, confirming `canModerate()` really does extend
+  moderation power to co-hosts and not just the host; (5) a co-host attempting `BAN_PARTICIPANT` targeting the
+  host is silently a no-op — host never receives `BANNED` (the `if (targetAttachment.isHost) return;` guard
+  holds); (6) the co-host banning a real (non-host) participant works, broadcasts `MEMBER_BANNED`, and a banned
+  account's later reconnect attempt is rejected outright (the WebSocket handshake itself fails); (7) revoking a
+  co-host's status via `REVOKE_COHOST` actually strips their power — a `SEAT_APPROVE` sent by the now-former
+  co-host has no effect, while the real host's approval still works; (8) `PREAUTHORIZE_SEAT` on a premium
+  account's user ID, then that account connecting fresh, arrives with `seated:true` in its `READY` payload with
+  no `SEAT_REQUEST` needed at all.
 
 - [ ] **T-019. Browser-verify typing indicators end-to-end (1:1 chat and party chat).**
   Two-browser-context Playwright test: one participant types, confirm the other sees the typing indicator appear
