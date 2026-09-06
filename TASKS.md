@@ -297,12 +297,15 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   `web/js/ads.js` `mountAds()`). Create one temporary active private ad per slot via the admin panel or direct
   REST, load the home page and confirm each configured placement actually renders the ad creative, then delete
   the temporary ads and restore the original `ads` config if you changed it.
+  REQUIRES ADMIN ACCESS: Playwright test attempted but localhost admin auth token retrieval failed. Requires
+  either direct API token or manual browser verification with admin credentials.
 
 - [ ] **T-024. Browser-verify the admin "Activity" tab.**
   Admin panel (`web/js/admin.js` `activityView`): confirm live-activity metrics render, hourly snapshot table
   populates, and the private-ads management table (enable/disable/edit/delete) works against real data. Requires
   the configured super-admin account credentials — if unavailable, document exactly what was and wasn't
   reachable rather than skipping the task silently.
+  REQUIRES ADMIN ACCESS: Same auth barrier as T-023. Recommend manual verification with super-admin account.
 
 - [x] **T-025. Browser-verify the daily login streak bonus feature (built 2026-09-06).**
   Migration `supabase/migrations/202609030002_daily_login_streak.sql`, RPCs `claim_daily_streak_bonus`/
