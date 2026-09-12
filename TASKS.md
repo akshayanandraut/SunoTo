@@ -570,7 +570,7 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
 
 ### Digital store
 
-- [ ] **T-060. Decide and log a safe, buildable v1 scope for the "Store" page (currently a placeholder).**
+- [x] **T-060. Decide and log a safe, buildable v1 scope for the "Store" page (currently a placeholder).**
   `web/js/views.js` `storeView` is a "Coming soon" stub. The original ask was a marketplace for buying/selling
   premium *artwork* — but a real user-to-user marketplace with payment splitting to artists is a much bigger
   legal/financial surface (seller payouts, tax/1099-equivalent reporting, dispute handling) than this app has
@@ -586,14 +586,38 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   update this task with your own reasoning if you judge differently), then proceed to T-061 only if you're
   confident in the scope — if not confident, leave this checked "decision logged, build deferred" and stop here
   rather than guessing at a marketplace/payout design.
+  DONE 2026-09-12: confident in the recommended scope, logged the decision in QUESTIONS.md ("Store page v1
+  scope"), and proceeded directly to building it (T-061) — went with profile badges specifically as the cosmetic
+  SKU type (simplest to display without touching every other page's rendering).
 
-- [ ] **T-061. Build the digital store v1 (cosmetic goods, Sparks/Credits-only, admin-curated catalog) per the scope decided in T-060.**
+- [x] **T-061. Build the digital store v1 (cosmetic goods, Sparks/Credits-only, admin-curated catalog) per the scope decided in T-060.**
   Only attempt this after T-060's scope is settled. Follow the existing patterns exactly: a new `app_config`-style
   or dedicated `store_items` table (RLS-locked, service-role only, admin-managed via a new `admin_*` RPC modeled
   on `admin_update_wheel_segments`), a `purchase_store_item` RPC modeled on `claim_ad_reward`'s idempotency
   pattern (charges Credits via `apply_wallet_entry`, records ownership), worker routes + `GamesService`-style
   service methods, an admin panel section to add/edit/remove catalog items, and a real `storeView` in
   `web/js/views.js` replacing the stub.
+  DONE 2026-09-12: built exactly per the recommended pattern. Migration `202609120002_digital_store_v1.sql`:
+  `store_items` (RLS: public read, service-role write, 5 seeded badges) and `store_purchases` (ownership
+  records, `unique(user_id,item_id)`), `profiles.equipped_badge_item_id` (nullable FK, one active badge at a
+  time for v1), `purchase_store_item`/`equip_store_item`/`admin_upsert_store_item` RPCs. New `StoreService.js` +
+  5 worker routes (`GET catalog`, `GET inventory`, `POST purchase`, `POST equip`, plus admin list/upsert),
+  `store_purchase` rate-limit bucket added to `RateLimitShard.js` (did not repeat the T-025 mistake of forgetting
+  this). Real `storeView` replacing the stub (sign-in gate, catalog grid, owned-item inventory with equip/
+  unequip), wired into `app.js`'s route-based data loading and click handlers, and an admin "Store catalog"
+  panel (list + add/edit/enable/disable form) in the `games` tab. **Found and fixed two real bugs while building
+  and testing, not just after:** (1) `purchase_store_item`'s `returns table(...,item_id smallint,...)` OUT
+  parameter collided with `store_purchases.item_id` in its own idempotency-check query — the third time this
+  exact ambiguous-column bug class has appeared (see T-021, `202609010002_fix_ad_earning_ambiguous_column.sql`)
+  — fixed via `202609120004_fix_purchase_store_item_ambiguous_column.sql` before it ever shipped broken; (2)
+  equipping a badge updated the store page's own state but not `state.accountProfile`, so the badge correctly
+  appeared in the Store's own inventory list but never showed on the Account page heading until a full reload —
+  caught by an actual Playwright click-through, not just API testing, and fixed by updating `accountProfile` in
+  the same click handler. Verified end-to-end via a 9-check API test (catalog, purchase, idempotent replay,
+  inventory, ownership-gated equip rejection, profile embed, insufficient-credits rejection) plus a live browser
+  run (buy → equip → badge visible in the Account page heading) and a live admin-route test (list, create,
+  disable/re-enable, confirmed disabled items drop out of the public catalog). `node --check` passed on every
+  touched file.
 
 ### Radio bot-listener / bot-chat simulation
 
