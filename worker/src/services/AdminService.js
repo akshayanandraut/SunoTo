@@ -23,6 +23,8 @@ export class AdminService{
   grantPremiumDays({adminId,userId,days}){return this.rpc("admin_grant_premium_days",{admin_id:adminId,target_user_id:userId,days})}
   expirePremiumMemberships(){return this.rpc("expire_premium_memberships")}
   runAutoDebitPremiumSweep(){return this.rpc("run_auto_debit_premium_sweep")}
+  partyRooms(limit=100){return this.request(`/party_rooms?select=public_id,room_type,name,status,owner_user_id,host_user_id,starts_at,ends_at,created_at&order=created_at.desc&limit=${limit}`)}
+  closePartyRoom({adminId,roomPublicId,reason}){return this.rpc("admin_close_party_room",{admin_id:adminId,room_public_id:roomPublicId,close_reason:reason})}
   gamesRevenue(limit=100){return this.request(`/platform_revenue_ledger?select=id,source,credits_amount,reason,metadata,created_at&order=created_at.desc&limit=${limit}`)}
   gamesRounds(gameType,limit=100){const filter=gameType?`&game_type=eq.${encodeURIComponent(gameType)}`:"";return this.request(`/game_rounds?select=id,game_type,user_id,stake_credits,payout_credits,outcome,created_at&order=created_at.desc&limit=${limit}${filter}`)}
   jackpotRounds(limit=50){return this.request(`/jackpot_rounds?select=id,opens_at,closes_at,status,total_tickets,pool_credits,winner_user_id,payout_credits,house_take_credits,drawn_at&order=id.desc&limit=${limit}`)}

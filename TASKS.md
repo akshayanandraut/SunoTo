@@ -495,7 +495,7 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   labels/stake-caps/response-time-thresholds and, where genuinely displayed, `payout_multiplier_bp` — no raw
   probability or unused multiplier fields cross the wire anymore. `node --check` passed.
 
-- [ ] **T-052. Build a party-room-specific "close room" / "ban from this room" admin action.**
+- [x] **T-052. Build a party-room-specific "close room" / "ban from this room" admin action.**
   Per ROADMAP.md Slice 7: party-room reports correctly land in the existing admin `reports` feed (reusing
   `record_report`, keyed by the room's `public_id`), but there is no admin-panel action to close a specific
   room or kick everyone from it — an admin can currently only restrict the underlying *account* via the existing
@@ -506,6 +506,27 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   sessions in it, a `worker/src/services/AdminService.js` method + route, and a "Close room" button next to
   party-room entries somewhere reachable in `web/js/admin.js` (there may not be a rooms list view yet — you may
   need to add one, e.g. under the existing `activityView` or a new small panel).
+  DONE 2026-09-12: found that `PartyRoomShard.js` already had a `POST /admin/close` internal DO route (broadcasts
+  `ROOM_CLOSED` and disconnects live sockets — and `web/js/app.js` already handled the client-side `ROOM_CLOSED`
+  event), but it was unreachable — no admin RPC, no worker route, no UI called it — and even if called, it only
+  disconnected *currently live* sockets without persisting anything, so a kicked user could just reconnect
+  immediately after. Built the missing pieces: (1) migration `202609120001_admin_close_party_room.sql` adds a
+  distinct `'closed'` status (party_rooms.status previously only allowed `active`/`archived`, and `archived` was
+  itself unused anywhere in the codebase — used a distinct value instead of overloading `archived`'s
+  passive/historical connotation with an explicit moderation action) and `admin_close_party_room(admin_id,
+  room_public_id, close_reason)`, following `admin_update_wheel_segments`'s exact security-definer +
+  `admin_audit` insert template; (2) `AdminService.js` gained `partyRooms()` (list) and `closePartyRoom()`;
+  (3) worker routes `GET /api/v1/admin/party-rooms` and `POST /api/v1/admin/party-rooms/close` (the POST also
+  calls the DO's existing `/admin/close` to kick anyone currently connected); (4) fixed the real "ban from this
+  room" gap by having `/admin/close` persist `room.closed=true` to the DO's own durable storage and added a
+  check at connection time (`if (room.closed) return 403 room_closed`) so a closed room can never be rejoined,
+  not just have its current occupants kicked; (5) added a "Party rooms" table with a "Close room" action to
+  `reportsView` in `web/js/admin.js` (no rooms list existed yet, per the task's own note) since party-room
+  reports already land in that same tab. Verified end-to-end against the live local worker (temporarily unlocked
+  local admin access the same way T-025 did, reverted after): created a real room via `create_party_room`,
+  called the HTTP route, confirmed `party_rooms.status` flipped to `closed` with an `admin_audit` row, confirmed
+  a fresh WebSocket connection attempt to that room was rejected outright, and confirmed the admin list endpoint
+  reflects the closed status. `node --check` passed on all 5 touched files.
 
 - [x] **T-053. Consider auto-restriction/kick logic for party-room participants who accumulate multiple reports.**
   Currently a reported party-room participant just accumulates rows in the existing `reports` table for manual

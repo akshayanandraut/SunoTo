@@ -74,7 +74,11 @@ export class PartyRoomShard {
 
     if (request.method === "POST" && url.pathname === "/admin/close") {
       const body = await request.json().catch(() => ({}));
-      this.broadcast(event("ROOM_CLOSED", { reason: body?.reason || "archived" }));
+      const room = (await this.state.storage.get("room")) || {};
+      room.closed = true;
+      room.closedReason = body?.reason || "archived";
+      await this.state.storage.put("room", room);
+      this.broadcast(event("ROOM_CLOSED", { reason: room.closedReason }));
       for (const socket of this.state.getWebSockets()) try { socket.close(4000, "room_closed"); } catch {}
       return Response.json({ ok: true });
     }
@@ -96,6 +100,9 @@ export class PartyRoomShard {
     const isFreshRoom = !storedRoom;
     const room = storedRoom || { hostUserId: isHost ? accountUserId : null, hostLastActiveAt: Date.now(), mode: roomTypeHint === "radio" ? "music" : DEFAULT_ROOM_MODE_ID, seatedParticipantIds: [], coHostAccountIds: [], preauthorizedAccountIds: [], bannedAccountIds: [] };
     room.seatedParticipantIds ??= []; room.coHostAccountIds ??= []; room.preauthorizedAccountIds ??= []; room.bannedAccountIds ??= [];
+    if (room.closed) {
+      return Response.json({ error: "room_closed" }, { status: 403 });
+    }
     if (accountUserId && room.bannedAccountIds.includes(accountUserId)) {
       return Response.json({ error: "banned_from_room" }, { status: 403 });
     }
