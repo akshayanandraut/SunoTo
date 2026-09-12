@@ -468,7 +468,7 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   tickets from `state.jackpotTierCounts` entries (no quantity input anywhere). No stale quantity-input code path
   remains. Migration `202608310042_jackpot_no_ticket_cap.sql` successfully removed the 100-ticket cap.
 
-- [ ] **T-051. Stricter odds non-disclosure: stop sending raw probability numbers to the client at all.**
+- [x] **T-051. Stricter odds non-disclosure: stop sending raw probability numbers to the client at all.**
   The house-cut copy audit (`QUESTIONS.md` line 60) removed every percentage/odds number from the *rendered* UI
   copy, but the underlying API responses (`state.wheelOdds`, `coinFlipOdds`, `coinTowerOdds`, `scratchCardOdds`,
   `streakLadderOdds`, `reflexTapTiers`, etc. — see `GamesService.js`'s `*Odds`/`*Tiers` methods) still return the
@@ -478,6 +478,22 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   low practical risk (a curious user reading devtools network tab, not a public API). If you do it, make sure you
   don't break the game UI that still needs the label/tier-name fields — only strip the numeric odds fields, keep
   labels.
+  DONE 2026-09-12: decided worth doing given it was a small, well-bounded change. Grepped `web/js/views.js` and
+  `web/js/app.js` for every actual usage of `*_bp` fields from these odds/tiers responses first, to know exactly
+  which numeric fields the UI genuinely needs vs. which are dead weight on the wire:
+  - **Wheel** (`wheelOdds`): `weight_bp` IS used client-side (draws the wheel's wedge sizes proportional to it —
+    removing it would break the wheel visual), kept. `multiplier_bp` was fetched but never read anywhere — stripped.
+  - **Coin Flip / Coin Tower / Scratch Card**: none of their probability/multiplier fields are used anywhere in
+    the client (only `label`/`max_stake_credits` are) — stripped all `*_probability_bp`/`*_multiplier_bp` fields
+    from all three.
+  - **Streak Ladder**: `payout_multiplier_bp` IS rendered directly as "2.70x" etc. next to each rung — kept.
+    `survive_probability_bp` is never read — stripped.
+  - **Reflex Tap**: only `label`/`max_response_ms` are used; `multiplier_bp` is fetched but never displayed —
+    stripped.
+  Edited each `GamesService.js` `select=` query to only request the fields actually needed. Verified against the
+  live local worker (`curl` on all 6 `/api/v1/games/*/odds|tiers` routes) that responses now only carry
+  labels/stake-caps/response-time-thresholds and, where genuinely displayed, `payout_multiplier_bp` — no raw
+  probability or unused multiplier fields cross the wire anymore. `node --check` passed.
 
 - [ ] **T-052. Build a party-room-specific "close room" / "ban from this room" admin action.**
   Per ROADMAP.md Slice 7: party-room reports correctly land in the existing admin `reports` feed (reusing

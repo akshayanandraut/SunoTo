@@ -53,7 +53,7 @@ export class GamesService {
     return Array.isArray(data) ? data[0] : data;
   }
   async wheelOdds() {
-    const response = await this.fetcher(`${this.url}/rest/v1/wheel_segments?select=label,weight_bp,multiplier_bp&order=id.asc`, { headers: this.headers() });
+    const response = await this.fetcher(`${this.url}/rest/v1/wheel_segments?select=label,weight_bp&order=id.asc`, { headers: this.headers() });
     if (!response.ok) throw new Error("wheel_odds_lookup_failed");
     return response.json();
   }
@@ -80,7 +80,7 @@ export class GamesService {
     return Array.isArray(data) ? data[0] : data;
   }
   async coinFlipOdds() {
-    const response = await this.fetcher(`${this.url}/rest/v1/coin_flip_tiers?select=label,max_stake_credits,win_probability_bp,bonus_probability_bp,bonus_multiplier_bp&order=id.asc`, { headers: this.headers() });
+    const response = await this.fetcher(`${this.url}/rest/v1/coin_flip_tiers?select=label,max_stake_credits&order=id.asc`, { headers: this.headers() });
     if (!response.ok) throw new Error("coin_flip_odds_lookup_failed");
     return response.json();
   }
@@ -96,7 +96,7 @@ export class GamesService {
     return Array.isArray(data) ? data[0] : data;
   }
   async coinTowerOdds() {
-    const response = await this.fetcher(`${this.url}/rest/v1/coin_tower_tiers?select=label,max_stake_credits,refund_probability_bp,win_probability_bp,win_multiplier_bp,topple_probability_bp,topple_multiplier_bp&order=id.asc`, { headers: this.headers() });
+    const response = await this.fetcher(`${this.url}/rest/v1/coin_tower_tiers?select=label,max_stake_credits&order=id.asc`, { headers: this.headers() });
     if (!response.ok) throw new Error("coin_tower_odds_lookup_failed");
     return response.json();
   }
@@ -128,7 +128,7 @@ export class GamesService {
     return Array.isArray(data) ? data[0] : data;
   }
   async scratchCardOdds() {
-    const response = await this.fetcher(`${this.url}/rest/v1/scratch_card_tiers?select=label,max_stake_credits,small_win_probability_bp,small_win_multiplier_bp,big_win_probability_bp,big_win_multiplier_bp&order=id.asc`, { headers: this.headers() });
+    const response = await this.fetcher(`${this.url}/rest/v1/scratch_card_tiers?select=label,max_stake_credits&order=id.asc`, { headers: this.headers() });
     if (!response.ok) throw new Error("scratch_card_odds_lookup_failed");
     return response.json();
   }
@@ -144,7 +144,7 @@ export class GamesService {
     return Array.isArray(data) ? data[0] : data;
   }
   async streakLadderOdds() {
-    const response = await this.fetcher(`${this.url}/rest/v1/streak_ladder_rungs?select=rung,label,survive_probability_bp,payout_multiplier_bp&order=rung.asc`, { headers: this.headers() });
+    const response = await this.fetcher(`${this.url}/rest/v1/streak_ladder_rungs?select=rung,label,payout_multiplier_bp&order=rung.asc`, { headers: this.headers() });
     if (!response.ok) throw new Error("streak_ladder_odds_lookup_failed");
     return response.json();
   }
@@ -453,7 +453,7 @@ export class GamesService {
     if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.message || "dragon_tiger_house_take_failed"); }
   }
   async reflexTapTiers() {
-    const response = await this.fetcher(`${this.url}/rest/v1/reflex_tap_tiers?select=label,max_response_ms,multiplier_bp&order=id.asc`, { headers: this.headers() });
+    const response = await this.fetcher(`${this.url}/rest/v1/reflex_tap_tiers?select=label,max_response_ms&order=id.asc`, { headers: this.headers() });
     if (!response.ok) throw new Error("reflex_tap_tiers_lookup_failed");
     return response.json();
   }
