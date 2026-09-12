@@ -429,7 +429,7 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
 
 ## SECTION 3 — P1: Content / recurring maintenance
 
-- [ ] **T-040. Reseed `daily_trivia_scheduled_questions` for dates after 2026-09-16.**
+- [x] **T-040. Reseed `daily_trivia_scheduled_questions` for dates after 2026-09-16.**
   The trivia question bank was last seeded through 2026-09-16 (13 days, seeded 2026-09-03). Once that runs out,
   `get_or_create_open_trivia_round()` silently falls back to repeating the same 5 hardcoded default questions
   every day (see `supabase/migrations/202608270025_games_admin_authoring.sql`), which is a real
@@ -439,6 +439,12 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   credentials in `worker/.dev.vars` (`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` — **not** the placeholder values
   in the root `.env.local`), with `Prefer: resolution=merge-duplicates`, exactly like the original seeding pass.
   Write the batch to a scratch file under `scripts/_*.json`, POST it, verify HTTP 201, then delete the scratch
+  DONE 2026-09-12: authored 14 new days (2026-09-17 through 2026-09-30, 70 questions total, 5/day) of varied
+  general-knowledge and India-flavored trivia (geography, history, science, mathematics, Indian freedom
+  fighters/monuments/culture) matching the existing bank's style and format (`question`/`options`(4)/
+  `correct_index`). POSTed via direct REST to `worker/.dev.vars`'s real Supabase credentials with
+  `Prefer: resolution=merge-duplicates`, confirmed HTTP 201, then verified all 27 dates (2026-09-04 through
+  2026-09-30) are now present via a follow-up GET. Scratch file `scripts/_trivia-seed.json` deleted after use.
   file. Check ROADMAP.md's Trivia slice for the exact prior seeding note and follow the same approach.
 
 ---
