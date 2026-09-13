@@ -2,7 +2,7 @@
 
 Mobile-first anonymous text chat for India. The project uses vanilla HTML, CSS and ES modules on the frontend, Cloudflare Workers/Durable Objects for realtime coordination, and Supabase Auth/Postgres for persistent account and business data.
 
-See `docs/DEPLOYMENT_INTEGRATION.md` for the Supabase, Vercel, and Cloudflare deployment boundaries and one-time dashboard setup.`r`n`r`n## Local development
+See `docs/DEPLOYMENT_INTEGRATION.md` for the Supabase and Cloudflare deployment boundaries and one-time dashboard setup.`r`n`r`n## Local development
 
 1. Install dependencies with `pnpm install`.
 2. Copy `.env.example` to `.env.local` and use development-safe values.
