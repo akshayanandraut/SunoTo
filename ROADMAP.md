@@ -2582,6 +2582,11 @@ Second Party Room game (mode `snake_ladder` in `ROOM_MODES`). First of this batc
 - Added `vercel.json` for the static Vite frontend: deterministic `npm ci`, `npm run build`, and `dist` output.
 - Vercel is intentionally frontend-only; realtime/API services remain Cloudflare Workers + Durable Objects and must continue using the existing Worker deployment flow.
 - **Pending:** connect the repository to a Vercel project, configure the required public environment variables, and verify the deployed frontend against the deployed Worker origin. This requires account/project authorization and was not performed locally.
+## Supabase/Vercel deployment integration — DONE, 2026-09-13
+- Confirmed the ordered Supabase migration history is version-controlled (84 migrations inspected) and uses RLS/auth.uid boundaries for persistent account/business data.
+- Removed tracked `.env.local` from Git while preserving the local file, tightened ignore rules, and retained `.env.example` as the placeholder-only template.
+- Added `docs/DEPLOYMENT_INTEGRATION.md` documenting the Vercel frontend, Supabase Auth/Postgres, and Cloudflare Worker/Durable Object boundaries plus one-time dashboard setup.
+- **Pending:** connect the GitHub repository to Vercel, configure public frontend variables and Supabase redirect URLs, provision Worker secrets/bindings, then run staging and production gates with real credentials.
 ## Up next
 - ~~Push `supabase/migrations/202608300031_realtime_stats_and_private_ads.sql` to Supabase~~ **RESOLVED**: confirmed via `supabase migration list --linked` on 2026-08-31 that every local migration through `202608310049` is applied remotely — nothing outstanding.
 - ~~Games platform — blocked on currency name~~ **RESOLVED long ago** (Sparks); this bullet was stale. All originally-scoped solo/duo/trio/quad/multi game ideas from the 2026-08-31 brainstorm are now built and verified (see `QUESTIONS.md` "New game ideas" section) — Blind Auction, Tug of War Trivia, Elimination Reflex, Prediction Pool, and Streak Ladder.

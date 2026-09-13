@@ -6,3 +6,6 @@ dist/
 coverage/
 *.log
 work/
+
+.env.*
+!.env.example
