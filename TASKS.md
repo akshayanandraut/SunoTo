@@ -650,6 +650,49 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   browser UI test (non-premium sees an upsell teaser not the picker, premium sees all 9 chips, single-select
   toggle works, home page teaser renders).
 
+- [ ] **T-092. Virtual-persona ("bot") chat quality: currently disabled in production; the built-in mock
+  provider is genuinely robotic and should not be what gets turned on for real users.**
+  User asked to "test it exhaustively with bots" and get "a real experience... not a robotic experience."
+  INVESTIGATED 2026-09-13: two real findings.
+  1. **The whole feature is off.** Live `app_config.virtual` is `{enabled:false,provider:"disabled",
+     maxConcurrent:0}` — no user has ever actually talked to a bot on this platform. The 6 personas
+     (`worker/src/policies/virtualPolicy.js`) are well-designed (distinct archetypes/tones/interests), they're
+     just never used.
+  2. **The zero-setup path (`provider:"mock"`) is exactly the "robotic" experience being asked to avoid** —
+     verified directly, not assumed: ran an 8-message conversation through `MockVirtualParticipantProvider`
+     locally. Every single reply appended the literal string `"btw i'm into Art too"` regardless of what was
+     said (a `verbosity:"long"` persona always appends `interests[0]` with no memory of having already said it),
+     and direct questions ("so where are you from") got a canned deflection instead of an answer. This is
+     template/regex-matching with a handful of fixed response pools per archetype — it will read as scripted to
+     any real user within a few messages, by design, not as a bug to patch.
+  3. **The real path (`provider:"workers-ai"`) is architecturally sound but untestable from this local
+     environment.** It calls Cloudflare Workers AI with a genuinely well-written persona-aware prompt
+     (`CloudflareWorkersAIProvider` in `VirtualParticipantProvider.js` — archetype-specific guidance, full
+     persona trait injection, explicit "never robotic, imperfect and casual like a real person texting"
+     instruction). Added the missing `[ai]` binding to `worker/wrangler.toml` (production-only — see next
+     point) so this path can actually run once deployed, and set the persona catalog's `model` to
+     `@cf/meta/llama-3.1-8b-instruct` as a starting point (admin-editable if a different model is wanted).
+  **Bug found and fixed while testing (would have blocked local dev entirely, not just this feature):** adding
+  the AI binding under `[env.dev]` (matching every other binding's existing duplication pattern in this
+  wrangler.toml) broke `wrangler dev` outright — Workers AI cannot be emulated locally at all, so `wrangler dev`
+  unconditionally tries to open a remote proxy connection to Cloudflare the moment the binding exists, which in
+  turn requires a `CLOUDFLARE_API_TOKEN` env var just to *start the dev server*, regardless of whether the
+  feature is even enabled. Fixed by binding `[ai]` only at the top level (used by the real production deploy,
+  which authenticates via the Worker's own account context with no token needed) and explicitly *not* under
+  `[env.dev]`, with a comment explaining why, so nobody re-adds it and breaks local dev again.
+  **Why this couldn't be fully verified end-to-end from here:** temporarily flipped the live admin config to
+  `provider:"workers-ai"` and ran a real chat against it locally — `wrangler dev` failed to reach Workers AI at
+  all without a `CLOUDFLARE_API_TOKEN`, which isn't available in this environment and shouldn't be fabricated.
+  Reverted the config back to `enabled:false,provider:"disabled"` immediately after confirming this (verified
+  via a follow-up read). **This lines up with the plan already stated: once actually deployed, Workers AI
+  authenticates automatically with no extra setup, so this is the natural point to validate real conversation
+  quality** — flip `virtual.enabled=true` and `provider="workers-ai"` from the admin panel post-deploy, and it
+  can be tested for real at that point (multi-turn conversations across all 6 personas/3 archetypes, checking
+  for repetition, checking it actually responds to what was said, checking replies read as casual/imperfect
+  rather than scripted). Recommend keeping `provider:"mock"` off the table entirely for real users given finding
+  #2 above, unless it gets a real rewrite (state/memory across turns, actually parsing and responding to
+  content) rather than being treated as a free fallback for when AI isn't wanted.
+
 ### Radio bot-listener / bot-chat simulation
 
 - [ ] **T-062. Design the bot-listener/bot-chat simulation for future custom radio channels.**

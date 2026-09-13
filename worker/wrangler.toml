@@ -45,6 +45,9 @@ class_name = "ForumRoomShard"
 binding = "RADIO_BUCKET"
 bucket_name = "sunoto-radio"
 
+[ai]
+binding = "AI"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ChatSession"]
@@ -119,3 +122,9 @@ class_name = "ForumRoomShard"
 [[env.dev.r2_buckets]]
 binding = "RADIO_BUCKET"
 bucket_name = "sunoto-radio-dev"
+
+# Deliberately NOT bound under [env.dev]: wrangler dev requires the AI binding to establish a
+# remote proxy connection to Cloudflare (Workers AI cannot be emulated locally at all), which in
+# turn requires a CLOUDFLARE_API_TOKEN env var just to start the dev server -- even when the
+# virtual-persona feature itself is disabled. Bound only at the top level (production deploy),
+# where the Worker authenticates via its own account context automatically, no token needed.
