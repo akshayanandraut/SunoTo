@@ -228,6 +228,18 @@ export class PartyRoomShard {
       this.broadcast(event("PARTY_TYPING", { participantId: attachment.participantId, typing: Boolean(payload.typing) }), socket);
       return;
     }
+    // Pure relay, never persisted -- client is authoritative over its own position/pose for this
+    // early prototype (no server-side movement validation/anti-cheat yet, matching the explicit
+    // "client's system will just broadcast" scope for phase 1).
+    if (type === "AVATAR_STATE" && attachment.seated) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "arena") return;
+      const ARENA_HALF = 260, x = Number(payload.x), y = Number(payload.y), z = Number(payload.z), yaw = Number(payload.yaw);
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z) || !Number.isFinite(yaw) || Math.abs(x) > ARENA_HALF || Math.abs(z) > ARENA_HALF || y < -1 || y > 50) return;
+      const action = ["idle", "walk", "sprint", "crouch", "prone"].includes(payload.action) ? payload.action : "idle";
+      this.broadcast(event("AVATAR_STATE", { participantId: attachment.participantId, x, y, z, yaw, action }), socket);
+      return;
+    }
     if (type === "HOST_HEARTBEAT" && attachment.isHost) {
       const room = (await this.state.storage.get("room")) || {};
       room.hostLastActiveAt = Date.now();

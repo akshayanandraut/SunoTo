@@ -693,6 +693,43 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   #2 above, unless it gets a real rewrite (state/memory across turns, actually parsing and responding to
   content) rather than being treated as a free fallback for when AI isn't wanted.
 
+- [x] **T-093. Arena: real-time multiplayer 3D-ish movement prototype (PUBG/BGMI-style controls), client-
+  authoritative position broadcast over the existing party-room WebSocket infrastructure.**
+  User-requested: a rendered 500×500 space where premium users move a character with standard third-person
+  shooter controls (walk/strafe/sprint/jump/crouch/prone, mouse-look), rendered entirely client-side, with the
+  client just broadcasting coordinates/action/facing direction to everyone else in the shared space — "not
+  necessarily complete 3D," explicitly an early prototype ahead of a later, revenue-funded real game.
+  DONE 2026-09-13: added `three` (industry-standard, MIT-licensed, no server dependency) and built
+  `web/js/arena.js` — a self-contained character controller + renderer: a 500×500 flat arena, capsule avatars,
+  third-person camera, and full PUBG-style movement (WASD/arrow-key walk+strafe, Shift sprint, Space jump with
+  real gravity, Ctrl/C crouch, Z prone, mouse-look via Pointer Lock on desktop, dual touch-drag zones — left
+  side moves, right side looks — plus on-screen action buttons on mobile). Deliberately simple visuals (capsule
+  avatars, flat ground, no textures/animation) — this is a movement/networking prototype, not the "real game."
+  **Two deployment paths, both built:** (1) a standalone premium-gated `#/arena` route for solo practice/testing
+  (no networking); (2) a new Party Room mode (`arena`, alongside the existing Snake & Ladder/Ludo/Charades/etc.
+  modes) for real multiplayer — reuses 100% of the *existing* party-room WebSocket/seat/broadcast infrastructure
+  rather than inventing a new transport or matching system. A new `AVATAR_STATE` message type in
+  `PartyRoomShard.js` is a pure relay (never persisted, matching the existing `ROOM_MESSAGE`/`PARTY_TYPING`
+  ephemeral-only pattern): gated to seated members in `arena` mode only, with server-side sanity bounds
+  (coordinate range, action whitelist) even though there's no real anti-cheat yet — client remains fully
+  authoritative over its own position for this phase, exactly as scoped.
+  **Scoping decision, stated plainly:** "total strangers" auto-matching into arena lobbies (vs. today's
+  manual create/join-by-code party rooms) was not built this pass — party rooms already solve "N people sharing
+  a live space," and building a *second*, parallel matching/lobby system in the same pass as the movement
+  engine itself would have diluted focus on the harder, more novel piece (the actual controller). Wiring
+  Arena into the existing Surprise-Match-style auto-matching queue (or Live World's grid-cell grouping) is a
+  clean, scoped follow-up once this core mechanic is confirmed worth investing further in.
+  Verified in three independent layers, each isolating what could go wrong: (1) the controller standalone —
+  a real browser test pressing W/Space/C and reading back internal position/pose state confirmed correct
+  forward movement, jump physics (gravity, grounded state), and crouch pose interpolation, zero console errors;
+  (2) the server relay directly over raw WebSocket — mode-gating (rejected before mode switch, accepted after),
+  correct broadcast payload, out-of-bounds coordinate rejection, unknown-action-string fallback to `"idle"`,
+  and `MEMBER_LEFT` firing on disconnect; (3) full client-to-client integration via two real signed-in premium
+  browser sessions in the same party room — both rendered a canvas, and after the host moved, the guest's own
+  Three.js scene picked up and tracked a live remote avatar (confirmed via an exposed remote-avatar-count debug
+  hook), and the reverse held too (host also saw the guest's idle-state avatar). `node --check` passed on every
+  touched file.
+
 ### Radio bot-listener / bot-chat simulation
 
 - [ ] **T-062. Design the bot-listener/bot-chat simulation for future custom radio channels.**

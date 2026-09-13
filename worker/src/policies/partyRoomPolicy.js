@@ -31,6 +31,7 @@ export const ROOM_MODES=[
   {id:"prediction_pool",name:"Prediction Pool"},
   {id:"charades",name:"Charades (text)"},
   {id:"connect_four",name:"Connect Four"},
+  {id:"arena",name:"Arena (early prototype, premium)"},
 ];
 export const DRAW_GUESS_CHOOSE_SECONDS=15;
 export const DRAW_GUESS_ROUND_SECONDS=75;
