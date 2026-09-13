@@ -198,6 +198,8 @@ function handlePartyEvent(type,payload){
   if(type==="MESSAGE_REJECTED"&&payload.code==="room_full"){state.partyMessage="The room is full — no seats available.";render();}
   if(type==="MESSAGE_REJECTED"&&payload.code==="cohost_requires_premium"){state.partyMessage="Co-hosts must have a premium membership.";render();}
   if(type==="MESSAGE_REJECTED"&&payload.code==="preauthorize_requires_premium"){state.partyMessage="Pre-authorized users must have a premium membership.";render();}
+  if(type==="MESSAGE_REJECTED"&&payload.code==="arena_disabled"){state.partyMessage="Arena isn't open yet.";render();}
+  if(type==="MESSAGE_REJECTED"&&payload.code==="arena_requires_premium"){state.partyMessage="Arena is a premium feature.";render();}
   if(type==="MESSAGE_REJECTED"&&payload.code==="draw_guess_needs_two_players"){state.partyMessage="Need at least 2 seated people to start Draw & Guess.";render();}
   if(type==="GAME_STATE"){gameStrokeLog=[];gameGuessLog=[];state.partyGame={...payload,isDrawer:payload.drawerParticipantId===state.partyParticipantId,choices:state.partyGame?.drawerParticipantId===payload.drawerParticipantId?state.partyGame?.choices||[]:[],word:null};render();}
   if(type==="GAME_YOUR_TURN"){state.partyGame={...state.partyGame,choices:payload.choices,phaseEndsAt:payload.phaseEndsAt,isDrawer:true};render();}

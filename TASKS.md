@@ -926,3 +926,150 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   discovery excluding blocks, chat request → accept → shared session, a real message actually delivered over
   the live `ChatSession` WebSocket, and opt-out cleanup) plus a live browser run (account-page entry link →
   consent screen → opt-in → browser geolocation → map renders). `node --check` passed on every touched file.
+
+---
+
+## SECTION 7 — P1: Work created by the 2026-09-14 product decisions (`OPUS_DECISIONS.md`)
+
+Every task below traces to a decision in `OPUS_DECISIONS.md` — read the matching lettered section there for
+the reasoning before starting, and do not re-open the decision. Suggested order is listed at the bottom of that
+file: T-100 → T-095 → T-102 → T-096/T-097 → T-099 → T-103 → T-101 → T-098.
+
+- [ ] **T-095. Add `license` + `attribution_text` to radio tracks, then curate-import 60–100 commercially-licensed tracks.**
+  Decision A. Suno scraping is rejected permanently (SunoTo is ad- and subscription-funded, so redistribution is
+  commercial use regardless of intent). Add `license` and `attribution_text` columns to the radio tracks table via a
+  new migration, make both **required** in the admin upload form (`web/js/admin.js`, the `uploadRadioTrack`
+  multipart path in `web/js/admin-api.js`, and the `/admin/radio/tracks` handler in `worker/src/index.js`), and
+  display attribution in the radio player UI — CC-BY legally requires visible credit, so this is a compliance
+  requirement, not a nicety. Then import a curated library across the existing channels. **Allowed licenses only:**
+  CC0/public domain, CC-BY, Pixabay Music, ccMixter commercial-permitting, FMA tracks explicitly marked CC0/CC-BY.
+  **Reject CC-BY-NC** (we are commercial) and anything unlabeled. Do **not** build a recurring importer — an
+  ~80-track library loops fine below a few thousand listeners and an importer is pure ongoing maintenance for a
+  problem we do not have.
+
+- [ ] **T-096. Arena: strangers auto-join lobby (the actual "total strangers" experience).**
+  Decision C1. Today Arena only works inside a party room you already joined with someone, which does not deliver
+  the stated vision. Add a single named auto-join lobby per region: "Enter Arena" claims a slot in a new
+  `ArenaLobbyShard` Durable Object. **Reuse, do not reinvent** — follow the `MatchmakingShard`/`PartyRoomShard`
+  structure, and copy the self-registering claim pattern Live World already proved (`claimDirect()` /
+  `/liveworld/claim`). The `AVATAR_STATE` relay, bounds validation, and action whitelist already built in
+  `PartyRoomShard.js` should move to (or be shared with) the new shard rather than being duplicated.
+
+- [ ] **T-097. Arena: enforce a configurable per-lobby capacity, ship 24.**
+  Decision C2. At the current 10 Hz full broadcast, 24 players is already ~5.5k msg/sec through one DO
+  (24×23×10); 100 players naively is ~99k msg/sec and will not work. Ship a cap of **24**, stored in `app_config`
+  (new `arena` key, or extend the existing pricing/flags pattern — follow `ConfigService.js`'s established
+  cache-and-normalize shape and add an admin panel field) so it is tunable without a deploy. Reject joins over
+  capacity with a clear client-side message.
+
+- [ ] **T-098. (Design only, do not build yet) Arena at 100 players.**
+  Decision C2. Only after T-096/T-097 are live and there is real player volume. Three things are required and must
+  be designed together: (1) **grid-cell interest management** — relay position only to players within ~60 m
+  instead of to everyone; (2) **drop to ~5 Hz** with client-side dead-reckoning interpolation so movement still
+  looks smooth; (3) **binary delta encoding** instead of per-tick JSON. Log the design with measured numbers before
+  writing code. Do not attempt this as an incremental tweak to the 24-player relay.
+
+- [ ] **T-099. Arena: Red Light / Green Light, with 5-minute scheduled round starts.**
+  Decision C3. The cheapest possible real game on top of what exists: the server needs only a phase timer
+  (green/red) and a "did this player's position change during a red phase" check against the movement stream
+  already being relayed — no new physics. Round start every 5 minutes is part of this task, not a separate lobby
+  feature. **Cart racing is explicitly deferred** — vehicle physics, a track, and collision resolution are a
+  different engine, not a game mode. Build this one, see whether anyone plays it, then decide about more.
+
+- [x] **T-100. Add `arena_enabled` and `live_world_enabled` feature flags (default OFF) and enforce them.** — done 2026-09-14
+  Decision D, and a real gap: `FLAG_KEYS` in `worker/src/policies/flagPolicy.js` had neither, so Arena and Live
+  World could not be turned off without a redeploy. Added both to `FLAG_KEYS` and `DEFAULT_DISABLED`
+  (`worker/src/policies/flagPolicy.js`) — no migration needed, since `normalizeFlags()` already treats any key
+  missing from the stored `app_config.flags` JSON as its `DEFAULT_DISABLED` default, so existing production rows
+  pick up both new flags as off automatically.
+  **Live World**: gated all 8 HTTP routes (`opt-in`, `opt-out`, `place`, `nearby`, `chat-requests` GET/POST, the
+  `.../respond` route, `claim-session`) in `worker/src/index.js` with `requireFlags(env,["live_world_enabled"])`
+  as the very first check, before auth — matches the existing `payments_enabled`/`games_enabled` pattern exactly.
+  Admin routes (`/admin/live-world-placements*`) were deliberately left ungated, matching how admin game routes
+  stay reachable regardless of `games_enabled`, so staff can still moderate/clean up placements while the feature
+  is off.
+  **Arena**: there was no dedicated Arena route to gate — Arena only exists today as a party-room mode
+  (`room.mode==="arena"`), entered via the `MODE_CHANGE` WebSocket message in `PartyRoomShard.js`. Discovered
+  while wiring this up that switching a room to arena mode had **no server-side premium check at all** — only
+  the client UI hid the option from non-premium users, which is bypassable by sending `MODE_CHANGE` directly over
+  the socket. Fixed as part of this task, not filed separately, since it's the same code path: `MODE_CHANGE` to
+  `"arena"` now checks `flags.arena_enabled` (rejects `arena_disabled`) and then `isPremiumAccount()` (rejects
+  `arena_requires_premium`) before the mode switch is allowed. Also added the same `arena_enabled` check inside
+  the `AVATAR_STATE` relay handler as a belt-and-suspenders guard, so a room already in arena mode stops relaying
+  movement the moment the flag is flipped off mid-session, without needing to wait for a mode change.
+  **Client**: `liveWorldView`/`arenaView` in `web/js/views.js` now show a "Coming soon" panel when their flag is
+  off (same pattern as the existing `games_enabled`/`forums_enabled` gates), the "Live World"/"Arena" buttons on
+  the account page are hidden per-flag, and the host's party-room mode dropdown drops the "Arena" option entirely
+  when `arena_enabled` is false so a host can't even select it. Added `arena_disabled`/`arena_requires_premium`
+  handling to `web/js/app.js`'s `MESSAGE_REJECTED` switch, matching every other rejection code's handling style.
+  **Verified**: ran the full existing test suite before and after (`npm run test`) — the 5 pre-existing failures
+  (ad-policy/presence/hardening tests, confirmed failing identically on a clean `git stash`) are unrelated to this
+  change and were not introduced by it. Added `test/arena-live-world-flags.test.js` (6 tests, instantiates the
+  real `PartyRoomShard` class directly against a mocked DO state/env to exercise `MODE_CHANGE`/`AVATAR_STATE`
+  gating) and `test/live-world-flags.test.js` (9 tests, calls the real exported `worker.fetch` for all 8 routes)
+  — all pass. Also ran a live `wrangler dev` against the real dev Supabase project and confirmed via curl that
+  `/api/v1/config/public` reports both flags as `false` by default and that `POST /live-world/opt-in` returns
+  `{"error":"feature_disabled:live_world_enabled"}` with status 503 before any auth check runs.
+  **Launch config this enables:** Arena off, Live World off, virtual personas off (already default), game staking
+  off (already default — payments + real-money/skill-gaming legal review outstanding, do not enable casually),
+  custom radio channels off (unrelated existing UI filter, see T-102). Everything else on.
+
+- [ ] **T-101. Before ever enabling bot chat: label it, cap its budget, validate it.**
+  Decision E. `app_config.virtual` stays `{enabled:false,provider:"disabled"}` at launch. Three preconditions, all
+  required before any enablement: (1) **reframe it as an explicitly labeled, user-chosen "AI companion" mode** —
+  never an invisible substitute injected into random match when nobody is found; label it in the mode picker and
+  persistently in the chat header; (2) add a **daily token budget cap** to `app_config.virtual` with a hard cutoff
+  and an admin field, since Workers AI bills per token and scales with exactly the traffic we want; (3) validate
+  real conversation quality across all 6 personas against the live model (needs a deployed environment — Workers AI
+  cannot run locally without `CLOUDFLARE_API_TOKEN`). The current mock provider is provably robotic (identical
+  appended phrase regardless of context) and must not be what ships.
+
+- [ ] **T-102. Re-enable custom radio channels with honest engagement metrics — replaces T-062/T-063.**
+  Decision F. **T-062 and T-063 are closed as decided-not-building**: simulated listener counts and bot chat are a
+  deception aimed at the host, who is the one person able to verify it is false. Deliver the real goal ("a new
+  channel shouldn't feel dead") honestly instead: show **cumulative true** signals (total plays, "N listens today",
+  tracks in queue) rather than fabricated concurrent listeners; surface the **queue and what's next** prominently
+  so content presence substitutes for people presence; support **scheduled events** with a listed start time so
+  hosts can seed a real audience. Do not extend `web/js/radio-active-users.js`'s smoothed random walk into listener
+  counts. Then unfilter the "Radio (public)" room type in `web/js/views.js` (`ROOM_TYPES.filter(type=>type.id!=="radio")`)
+  and replace the "Custom channels — coming soon" card with a real directory.
+
+- [ ] **T-103. Group video for Party Rooms: capped mesh at 4 publishers — answers T-064.**
+  Decision G. **T-064 is decided: capped mesh now, SFU later.** 4 publishers = 3 peer connections each, which
+  mid-range Android handsets in India handle, and it reuses the existing 1:1
+  `VIDEO_OFFER`/`VIDEO_ANSWER`/`VIDEO_ICE_CANDIDATE` signaling in `PartyRoomShard.js` with renegotiation on
+  join/leave — zero new infra, zero per-GB cost. Members 5–10 stay audio/chat-only and watch the 4 tiles. T-065
+  (signaling) and T-066 (tile grid UI) proceed on this basis. **Also instrument a counter for how often a room hits
+  the 4-publisher cap** — the documented trigger to build the Cloudflare Realtime/Calls SFU path is >20% of video
+  sessions hitting the cap, and that trigger must be measurable rather than guessed. **T-067 (video Charades) stays
+  deferred** until the SFU exists; text Charades already works and is a better game than a 4-publisher version.
+
+- [ ] **T-104. (BLOCKED — owner action) Fix the Cloudflare Pages "Deploy command".**
+  Decision I. The Pages project's Deploy command is a bare `npx wrangler deploy`, which finds no `wrangler.toml`
+  and mis-parses the frontend's `vite.config.js` (`Error parsing file: /opt/buildhome/repo/vite.config.js`). Fix in
+  the Cloudflare dashboard: either clear the Deploy command entirely — the Worker deploys separately via
+  `npm run worker:deploy`, which is the documented architecture in `docs/DEPLOYMENT_INTEGRATION.md` — or set it to
+  `npx wrangler deploy --config worker/wrangler.toml`. Not fixable from the repo; no API access from the dev
+  environment.
+
+### Decisions that closed tasks without creating work (see `OPUS_DECISIONS.md`)
+
+- **T-062, T-063** — closed, not building simulated radio listeners/chat. Superseded by T-102.
+- **T-064** — answered: capped mesh. Implemented as T-103.
+- **T-067** — remains deferred until an SFU exists.
+- **T-070 (Scrabble)** — declined. Dictionary/tile/board complexity is an order of magnitude above any game built
+  here, Ludo/Snake & Ladder/Rummy already cover board games, and it was never re-requested.
+- **T-071 (`publicRadioRooms` plumbing)** — leave as-is; clean up only if already editing that region for another
+  reason.
+- **T-072 (`roomType:"radio"` backend)** — keep it reachable, keep it UI-filtered until T-102 lands. Removing it
+  would mean rebuilding it for T-102.
+- **Live World voice** — hard no for now. Voice among strangers grouped by real-world proximity is the product's
+  most dangerous surface and is unmoderatable at our size. Preconditions before it is even designed: a real
+  report→mute→ban flow with operator review, join rate limits, and a minimum-account-age gate.
+- **Live World 3D** — never a second 3D engine. If it happens, it is Arena's Three.js renderer with a Live-World
+  spawn rule.
+- **Arena subscription tier** — no second tier. One premium tier (₹299/30d, ₹749/90d, ₹2399/365d) stays the only
+  subscription; differentiate inside it via credit entry fees (`app_config.pricing`) and `store_items` cosmetics.
+- **Free Cloudflare hosting** — impossible by design. Durable Objects require the Workers Paid plan ($5/mo flat,
+  not traffic-scaled). Do not redesign anything to chase a free tier. The real per-user costs are Workers AI,
+  video egress, and R2 — those are what month-1 limiting targets.

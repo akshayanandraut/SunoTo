@@ -234,6 +234,9 @@ export class PartyRoomShard {
     if (type === "AVATAR_STATE" && attachment.seated) {
       const room = (await this.state.storage.get("room")) || {};
       if (room.mode !== "arena") return;
+      let flags;
+      try { flags = (await new ConfigService(this.env, this.env.FETCHER || fetch).flags()).config; } catch { flags = null; }
+      if (!flags?.arena_enabled) return;
       const ARENA_HALF = 260, x = Number(payload.x), y = Number(payload.y), z = Number(payload.z), yaw = Number(payload.yaw);
       if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z) || !Number.isFinite(yaw) || Math.abs(x) > ARENA_HALF || Math.abs(z) > ARENA_HALF || y < -1 || y > 50) return;
       const action = ["idle", "walk", "sprint", "crouch", "prone"].includes(payload.action) ? payload.action : "idle";
@@ -247,6 +250,12 @@ export class PartyRoomShard {
       return;
     }
     if (type === "MODE_CHANGE" && attachment.isHost && validRoomModeId(payload.mode)) {
+      if (payload.mode === "arena") {
+        let flags;
+        try { flags = (await new ConfigService(this.env, this.env.FETCHER || fetch).flags()).config; } catch { flags = null; }
+        if (!flags?.arena_enabled) { socket.send(event("MESSAGE_REJECTED", { code: "arena_disabled" })); return; }
+        if (!await this.isPremiumAccount(attachment.accountUserId)) { socket.send(event("MESSAGE_REJECTED", { code: "arena_requires_premium" })); return; }
+      }
       const room = (await this.state.storage.get("room")) || {};
       if (room.mode !== payload.mode && room.game && room.game.status !== "game_over" && room.game.status !== "idle") {
         if (room.mode === "snake_ladder" && room.game.pot > 0) {
