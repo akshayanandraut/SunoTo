@@ -10,11 +10,15 @@ export function normalizeAdConfig(value={}){
   return{enabled:value.enabled===true,provider,adFreeBalanceThreshold:threshold,interstitialEveryScans:frequency,placements};
 }
 
-export function adDecision({registered=false,balance=0,scanCount=0,config=DEFAULT_AD_CONFIG}={}){
+// Ad tiers are keyed on premium subscription status, not wallet balance:
+// - Free (no account, or a registered account with no money ever put in): full-page ads, incl. periodic interstitials.
+// - "Paid" (registered, holds some Credits -- has recharged/played) but not premium: side ads only (top/bottom/desktopSide), no interstitials.
+// - Premium subscription: fully ad-free. This is the only path to zero ads.
+export function adDecision({registered=false,isPremium=false,balance=0,scanCount=0,config=DEFAULT_AD_CONFIG}={}){
   const normalized=normalizeAdConfig(config),credits=Number.isSafeInteger(balance)?Math.max(0,balance):0;
   if(!normalized.enabled)return{tier:"disabled",provider:normalized.provider,placements:[]};
-  if(registered&&credits>normalized.adFreeBalanceThreshold)return{tier:"ad_free",provider:normalized.provider,placements:[]};
-  const lowBalanceRegistered=registered&&credits>=1,placements=[...(normalized.placements.top?["top"]:[]),...(normalized.placements.bottom?["bottom"]:[]),...(normalized.placements.desktopSide?["desktopSide"]:[])];
-  if(!lowBalanceRegistered&&normalized.placements.interstitial&&scanCount>0&&scanCount%normalized.interstitialEveryScans===0)placements.push("interstitial");
-  return{tier:lowBalanceRegistered?"registered_low_balance":"free_or_zero",provider:normalized.provider,placements,lowBalanceHint:lowBalanceRegistered};
+  if(isPremium)return{tier:"ad_free",provider:normalized.provider,placements:[]};
+  const isPaidNonPremium=registered&&credits>=normalized.adFreeBalanceThreshold,placements=[...(normalized.placements.top?["top"]:[]),...(normalized.placements.bottom?["bottom"]:[]),...(normalized.placements.desktopSide?["desktopSide"]:[])];
+  if(!isPaidNonPremium&&normalized.placements.interstitial&&scanCount>0&&scanCount%normalized.interstitialEveryScans===0)placements.push("interstitial");
+  return{tier:isPaidNonPremium?"side_ads_only":"full_page_ads",provider:normalized.provider,placements,lowBalanceHint:isPaidNonPremium};
 }

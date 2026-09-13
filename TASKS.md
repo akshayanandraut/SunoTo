@@ -730,6 +730,54 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   hook), and the reverse held too (host also saw the guest's idle-state avatar). `node --check` passed on every
   touched file.
 
+- [x] **T-094. Fix the ad tier model to match the intended free/paid/premium split, and build a unified
+  pricing config covering every price that had no admin control at all.**
+  User clarification: free tier = full-page ads (incl. interstitials); a registered account that's recharged/
+  played (paid, but not premium) = side ads only, no interstitials; premium subscription = fully ad-free. Also
+  requested one central, admin-editable place for every price across every game/subscription/feature, so
+  editing it "automatically updates everywhere" instead of needing a code deploy.
+  DONE 2026-09-13, two parts:
+  1. **Ad tiers.** Found the *actual* live logic was completely different from the intended model: `adDecision()`
+     gated "ad-free" purely on wallet balance crossing a threshold — premium status wasn't a factor in ad
+     display at all. Rewired it: `isPremium` is now the ONLY path to `tier:"ad_free"`; a registered account
+     with balance at/above the (repurposed, same field) `adFreeBalanceThreshold` gets `"side_ads_only"` (top/
+     bottom/desktopSide, no interstitials); everyone else gets `"full_page_ads"` (all placements, incl.
+     periodic interstitials). Threaded `isPremium` from `state.accountProfile?.profile?.is_premium` through
+     both `mountAds()` call sites in `app.js`. Verified all 5 cases directly (anonymous, registered/zero-
+     balance, registered/paid-non-premium, premium-zero-balance, premium-with-balance) — premium is
+     unconditionally ad-free regardless of balance, exactly as specified.
+  2. **Unified pricing config.** New `app_config` key `"pricing"` (migration `202609130003_unified_pricing_
+     config.sql`) covering every price that was previously hardcoded in JS constants and/or SQL with zero admin
+     control: party room monthly tiers + multi-month discount, profile verification fee, favourite-reconnect
+     fee, paid chat message/photo costs, contact-unlock cost/duration, and all 5 preference-matching fees.
+     Membership/store/ads/virtual/guestWin/adEarning/dailyStreak pricing already had their own admin-editable
+     `app_config` entries before this and were deliberately left alone (not duplicated) — this key fills the
+     actual gaps. **Found and fixed a real bug while building this:** party room pricing existed in *two*
+     places that could silently drift apart — `partyRoomPolicy.js`'s `ROOM_PRICE_TIERS` (client display only)
+     and a separately hardcoded `case ... 10000 ... 5000` inside the `create_party_room` SQL function (the one
+     that actually charges). Rewired `create_party_room` to read from the shared config (with the exact same
+     hardcoded values as fallback, so behavior is byte-for-byte identical unless an admin actually edits it),
+     same for `request_verification`'s fee. **Also hit the exact same ambiguous-column bug for the fourth time
+     this session** (`update_pricing_config`'s own `version=version+1` collided with its `version` OUT
+     parameter) — fixed by copying the already-correct pattern from the sibling `update_virtual_config`
+     (`current_row.version+1`), a good reminder to copy sibling functions' exact column-qualification style, not
+     just their general shape. Added a new admin "Pricing" panel (`worker/src/policies/pricingPolicy.js` for
+     validation, `ConfigService.pricing()`/`updatePricing()`, one form with all values pre-filled). Verified
+     end-to-end: default pricing produces byte-identical charges to before this change (including the
+     multi-month discount math), editing the config via the real admin RPC immediately changes what a brand
+     new room creation actually charges, and a full browser round-trip through the actual admin panel form
+     (sign in, edit, save, reload, confirm persisted) all passed with zero page errors.
+  **Explicitly not done this pass** (flagged, not silently skipped): `SESSION_DEFAULTS`' remaining timing-only
+  fields (session lengths, cooldowns, idle timeouts — not prices) and `PREFERENCE_PRICING`'s timeout-seconds
+  fields stay as JS constants for now; only the fields that are genuinely *prices* were pulled into the shared
+  config, to keep this pass scoped to what was actually asked for rather than sweeping every constant in the
+  codebase into one table indiscriminately.
+  **On "host everything on Cloudflare free for the first month" (same request):** flagged directly rather than
+  silently attempting it — this app's entire real-time architecture is Durable-Object-based (ChatSession,
+  PartyRoomShard, MatchmakingShard, every feature built this session), and Durable Objects require the Workers
+  *Paid* plan ($5/month minimum) — there is no way to run this app on Cloudflare's free tier at all, independent
+  of traffic volume or feature scope. This is a platform requirement, not a config choice.
+
 ### Radio bot-listener / bot-chat simulation
 
 - [ ] **T-062. Design the bot-listener/bot-chat simulation for future custom radio channels.**
