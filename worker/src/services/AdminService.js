@@ -27,6 +27,8 @@ export class AdminService{
   closePartyRoom({adminId,roomPublicId,reason}){return this.rpc("admin_close_party_room",{admin_id:adminId,room_public_id:roomPublicId,close_reason:reason})}
   storeItems(){return this.request("/store_items?select=id,sku,name,description,icon,price_credits,active&order=id.asc")}
   upsertStoreItem({adminId,item}){return this.rpc("admin_upsert_store_item",{admin_id:adminId,item})}
+  liveWorldPlacements(){return this.request("/live_world_placements?select=user_id,grid_lat,grid_lng,placed_at,updated_at&order=updated_at.desc&limit=200")}
+  removeLiveWorldPlacement({adminId,userId,reason}){return this.rpc("admin_remove_live_world_placement",{admin_id:adminId,target_user_id:userId,removal_reason:reason})}
   gamesRevenue(limit=100){return this.request(`/platform_revenue_ledger?select=id,source,credits_amount,reason,metadata,created_at&order=created_at.desc&limit=${limit}`)}
   gamesRounds(gameType,limit=100){const filter=gameType?`&game_type=eq.${encodeURIComponent(gameType)}`:"";return this.request(`/game_rounds?select=id,game_type,user_id,stake_credits,payout_credits,outcome,created_at&order=created_at.desc&limit=${limit}${filter}`)}
   jackpotRounds(limit=50){return this.request(`/jackpot_rounds?select=id,opens_at,closes_at,status,total_tickets,pool_credits,winner_user_id,payout_credits,house_take_credits,drawn_at&order=id.desc&limit=${limit}`)}

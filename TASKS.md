@@ -619,6 +619,37 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
   disable/re-enable, confirmed disabled items drop out of the public catalog). `node --check` passed on every
   touched file.
 
+- [x] **T-091. Build "Surprise Match": premium-only date-style experience filters layered on top of the existing
+  random/preference matchmaking engine (not a separate matching system).**
+  User-requested feature: convert 1:1 random chat into a "surprise" product with a variety of date-style
+  experience types (Speed Date, Candlelit Dinner, Deep Talk, Flirty & Fun, etc. — at least 8-9 types), gated to
+  premium/paid users only, using the same search-and-match mechanic already in place.
+  DONE 2026-09-13: shipped 9 experience types (`worker/src/policies/experiencePolicy.js`: Surprise Me, Speed
+  Date, Candlelit Dinner, Deep Talk, Flirty & Fun, Adventure Chat, Night Owl, Weekend Plans, Blind Video Date —
+  3 of the 9 force video mode). Implemented as a new `experienceType` field threaded through the *existing*
+  `preferencePolicy.js`/`MatchmakingService.js` machinery already built for paid gender/age/radius preferences,
+  not a parallel system: strict same-type-only pairing (`satisfiesPreference()`), a `requiresExactMatch()` gate
+  (new — separates "needs the wait/timeout/exact-match machinery" from "costs Credits," since this feature is
+  free for premium members, unlike the existing paid preferences), a fallback to random matching after the
+  existing preference timeout if no same-type match is found (mirrors the existing paid-preference UX rather
+  than inventing new behavior), and virtual/AI-persona fallback explicitly disabled for experience-type searches
+  (`virtualFallback()` guard) since pairing a paying premium user expecting a real date with an AI persona would
+  be a low-quality, borderline-deceptive experience. New `experience_match_enabled` admin kill-switch flag.
+  Client: a premium-gated chip picker injected into the existing onboarding form (`mountExperienceMatch()` in
+  `app.js`, reuses 100% of the existing age/gender/search flow) and a home-page teaser section.
+  **Found and fixed a real, non-obvious bug while testing:** forcing `mode:"video"` for date-style types at
+  search time was not enough — `ChatSession.js` has its *own separate* video-eligibility gate
+  (`videoEligible()`) tied to the admin's general "video beta" config toggle, which would have silently blocked
+  video for every experience-type match unless that unrelated admin toggle happened to also be on. Fixed by
+  threading `experienceType` through the match claim → `authorize-session` response → chat socket connection →
+  `session.participants[id].experienceType`, and bypassing the beta-config check specifically when both chat
+  participants carry the same (non-null) `experienceType` — found only by tracing the actual runtime path with
+  a live WebSocket test, not by reading the search-time code alone. Verified end-to-end: a 4-check API test
+  (premium-gate rejection, same-type pairing, forced video mode, strict cross-type isolation), a dedicated
+  WebSocket test confirming both sides actually receive `VIDEO_ELIGIBLE` for a video-required type, and a
+  browser UI test (non-premium sees an upsell teaser not the picker, premium sees all 9 chips, single-select
+  toggle works, home page teaser renders).
+
 ### Radio bot-listener / bot-chat simulation
 
 - [ ] **T-062. Design the bot-listener/bot-chat simulation for future custom radio channels.**
@@ -707,3 +738,63 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
 
 - [ ] **T-080. Wire Cloudflare Logpush/Analytics Engine so `/api/v1/health`'s `errors.fatalCount`/`unknownCount` are real instead of `null`.**
   Purely an observability nice-to-have, not customer-facing. Low priority relative to everything above.
+
+- [x] **T-090. Live World module: a lightweight globe/3D-plane space where opted-in users place a character at an
+  approximate map location and interact via text chat plus distance-aware voice broadcast.**
+  Originally logged as an idea-only roadmap placeholder, not to be built until deliberately scoped. Explicitly
+  greenlit and scoped down to a safe, buildable **phase 1** in the same session: premium-only, text-chat-only,
+  no voice broadcast and no real 3D rendering yet (both deferred — see below for why). Requirements below are
+  the FULL future vision; phase 1 satisfies the ones marked done, defers the rest to a later phase.
+  - **Privacy-preserving approximate location** — DONE. `place_live_world_character()` snaps raw lat/lng to a
+    0.5-degree grid cell (~55km) server-side before it's ever persisted; the exact coordinate the browser
+    reports is never stored or returned to any other user, only the grid cell.
+  - **Explicit opt-in** — DONE. `opt_in_live_world()`/`profiles.live_world_opted_in_at` is a dedicated,
+    revocable consent action distinct from account signup; `opt_out_live_world()` revokes it and deletes the
+    placement in one step.
+  - **Block/mute/report** — DONE for blocking (`nearby_live_world_placements()` excludes both directions of the
+    existing `blocks` table). Reporting a Live World chat partner works exactly like reporting a random-chat
+    partner (same `ChatSession.js`/`record_report` path) once a chat starts, since Live World chats run on the
+    exact same `ChatSession` Durable Object as every other 1:1 chat.
+  - **Moderation** — DONE. `admin_remove_live_world_placement()` follows the same security-definer +
+    `admin_audit` pattern as `admin_close_party_room` (T-052), with a "Live World placements" table + Remove
+    action in the admin panel's reports tab.
+  - **Age/safety controls** — same 18+ account-level gate as the rest of the platform (inherited, not
+    re-implemented). Voice broadcast's higher risk profile is exactly why it's deferred to a later phase, not
+    built alongside this one.
+  - **Rate limits** — DONE. `live_world_place` (20/hour) and `live_world_chat_request` (20/hour) added to
+    `RateLimitShard.js`'s `LIMITS` map — did not repeat the T-025/T-021/T-061 mistake of forgetting this.
+  - **Voice consent** — NOT YET BUILT. Deferred along with voice broadcast itself.
+  - **No background tracking** — DONE. Location is only read once, at the moment the user clicks "Use my
+    approximate location" (a single `navigator.geolocation.getCurrentPosition()` call, not `watchPosition`).
+  - **Graceful 2D/mobile fallback** — phase 1 IS 2D-only: a simple equirectangular-projected dot map
+    (`.live-world-map`/`.live-world-dot` in `games.css`) using pure CSS positioning, no map image asset, no 3D
+    library, no external dependency. This is the primary rendering, not a fallback from something else yet.
+  - **Scalable proximity rooms** — NOT YET NEEDED at phase-1 scale: nearby lookups are a single indexed SQL
+    query (`nearby_live_world_placements`, limit 200), not a sharded real-time system. Revisit if/when adoption
+    requires it.
+  **What's deliberately NOT in phase 1, and why:** live voice broadcast and real 3D/globe rendering are the two
+  highest-risk, highest-effort pieces of the original vision — voice broadcast among strangers grouped by
+  real-world proximity is a materially different safety surface than anything else on this platform (no existing
+  precedent to reuse, needs its own dedicated consent/abuse-prevention design), and 3D rendering requires
+  introducing a new client-side dependency (no map/3D library exists in this codebase today). Building the safe,
+  reusable foundation first (consent, approximate location, moderation, discovery, text chat via 100%-reused
+  `ChatSession.js` infrastructure) and deferring the two highest-stakes pieces was a deliberate scope decision
+  made while implementing this, not an oversight.
+  **How the text-chat interaction actually works:** rather than building a new real-time matching system,
+  Live World reuses the *existing* `ChatSession` Durable Object wholesale. A chat request/accept exchange
+  (`live_world_chat_requests` table, `request_live_world_chat`/`respond_live_world_chat_request` RPCs) produces
+  a shared `session_id`; each side then independently self-registers an active claim in `MatchmakingShard`
+  under their own live anonymous identity (new `claimDirect()` method / `/liveworld/claim` route) pointing at
+  that same `session_id`, which is all the existing `/chat/:sessionId/socket` route's authorization check
+  needs — so the actual chat mechanics required zero changes to `ChatSession.js`.
+  **Bugs found and fixed while building/testing this (not after):** (1) `nearby_live_world_placements()`
+  initially failed with "structure of query does not match function result type" — `profiles.username` is
+  `citext`, not `text`, and Postgres set-returning functions require an exact type match on declared return
+  columns; fixed with an explicit `::text` cast (`202609130002_fix_nearby_live_world_citext.sql`). (2) The
+  `/live-world/claim-session` route initially read both the anonymous token and the account token from the same
+  `Authorization` header (copying a mistake, not `/match/search`'s already-correct dual-header pattern) — fixed
+  to use `x-account-authorization` for the account token, matching every other dual-auth route in this codebase.
+  Verified end-to-end via a 9-step test (premium gate rejection, opt-in, grid-snapping on placement, nearby
+  discovery excluding blocks, chat request → accept → shared session, a real message actually delivered over
+  the live `ChatSession` WebSocket, and opt-out cleanup) plus a live browser run (account-page entry link →
+  consent screen → opt-in → browser geolocation → map renders). `node --check` passed on every touched file.

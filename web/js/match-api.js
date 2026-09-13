@@ -15,3 +15,4 @@ export function respondReconnect({anonymousToken,requestId,accepted,fetcher=fetc
 export function playGuestWin(anonymousToken,options={}){return jsonCall("/guest-win/play",{...options,token:anonymousToken,method:"POST",body:"{}"});}
 export function guestWinStatus(anonymousToken,options={}){return jsonCall("/guest-win/status",{...options,token:anonymousToken});}
 export function claimGuestWin({accountSession,anonId,fetcher=fetch,apiBase=base}={}){return jsonCall("/guest-win/claim",{apiBase,fetcher,token:accountSession.access_token,method:"POST",body:JSON.stringify({anonId})});}
+export function liveWorldClaimSession({anonymousToken,accountSession,sessionId,fetcher=fetch,apiBase=base}){return jsonCall("/live-world/claim-session",{apiBase,fetcher,token:anonymousToken,accountToken:accountSession.access_token,method:"POST",body:JSON.stringify({sessionId})});}
