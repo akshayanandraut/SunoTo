@@ -2,6 +2,7 @@
   "name": "random-chat-india",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.19.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",

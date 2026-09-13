@@ -1,3 +1,4 @@
+- `GET /api/health` is a minimal public availability check returning only `status`, `app`, sanitized `revision`, and `timestamp`; it never performs dependency checks or exposes infrastructure details.
 # HTTP API v1
 
 ## Anonymous session

@@ -117,8 +117,10 @@ async function buildHealthReport(env, fetcher = fetch) {
     errors: { fatalCount: null, unknownCount: null, recent: [], note: "log-based error counts are not wired up yet — see ROADMAP" },
   };
 }
+function buildPublicHealth(env, now = new Date()) { return { status: "ok", app: "sunoto", revision: /^[0-9a-f]{40}$/i.test(env.RELEASE_REVISION || "") ? env.RELEASE_REVISION.toLowerCase() : null, timestamp: now.toISOString() }; }
 async function handleRequest(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/api/health") return Response.json(buildPublicHealth(env));
     if (url.pathname === "/api/v1/health") {
       const report = await buildHealthReport(env, env.FETCHER || fetch);
       return Response.json(report, { status: report.status === "outage" ? 503 : 200 });

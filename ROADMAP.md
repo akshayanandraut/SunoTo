@@ -2583,6 +2583,10 @@ Second Party Room game (mode `snake_ladder` in `ROOM_MODES`). First of this batc
 - Supabase Auth/Postgres remains the persistent account/business layer; Cloudflare Workers + Durable Objects remain the realtime/API layer.
 - Removed the temporary Vercel deployment configuration and corrected deployment documentation so it no longer implies a hybrid Vercel frontend.
 - **Pending:** connect GitHub to Cloudflare Pages, configure Pages public variables and Supabase redirect URLs, provision Worker secrets/bindings, then run staging and production gates with real credentials. Do not delete any existing Vercel project until the Cloudflare production URL is verified.
+## Public app health endpoint — DONE, 2026-09-13`r`n- Added `GET /api/health` with only `status`, `app`, sanitized `revision`, and server `timestamp`.`r`n- The endpoint performs no dependency/database calls, exposes no infrastructure or secret details, and is safe for status monitoring; the existing detailed `/api/v1/health` remains available for controlled operational checks.`r`n- Added focused verifier coverage in `test/hardening.test.js`.`r`n`r`n## Cloudflare package-install compatibility — DONE, 2026-09-13
+- Added an explicit root package entry to `pnpm-workspace.yaml` and pinned `pnpm@11.19.0` in `package.json`, resolving the Cloudflare `packages field missing or empty` installation failure.
+- Frozen pnpm installation and `npm run build` completed successfully; only the existing local Node 22.11 versus Vite 22.12 recommendation remains.
+
 ## Up next
 - ~~Push `supabase/migrations/202608300031_realtime_stats_and_private_ads.sql` to Supabase~~ **RESOLVED**: confirmed via `supabase migration list --linked` on 2026-08-31 that every local migration through `202608310049` is applied remotely — nothing outstanding.
 - ~~Games platform — blocked on currency name~~ **RESOLVED long ago** (Sparks); this bullet was stale. All originally-scoped solo/duo/trio/quad/multi game ideas from the 2026-08-31 brainstorm are now built and verified (see `QUESTIONS.md` "New game ideas" section) — Blind Auction, Tug of War Trivia, Elimination Reflex, Prediction Pool, and Streak Ladder.

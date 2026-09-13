@@ -8,9 +8,13 @@ SunoTo uses two deployment boundaries:
 ## One-time dashboard setup
 
 1. Create or select the Supabase project and apply the migration history. Copy its HTTPS URL and publishable/anon key into the Cloudflare Pages project and Worker environment configuration.
-2. Connect the GitHub repository and `main` branch to Cloudflare Pages. Set the build command to `npm run build`, output directory to `dist`, and root directory to the repository root.
+2. Connect the GitHub repository and `main` branch to Cloudflare Pages. Set the build command to `npm run build`, output directory to `dist`, and root directory to the repository root. The repository pins `pnpm@11.19.0` and declares the root workspace explicitly for Cloudflare dependency installation.
 3. Deploy the Worker separately with `npm run worker:deploy` after setting Wrangler secrets and bindings. Point `VITE_API_BASE_URL` at that Worker’s `/api/v1` origin.
 4. Set the exact Pages frontend origin in the Worker’s `ALLOWED_ORIGIN` and configure Supabase Auth redirect URLs for that same Pages origin.
 5. Run the documented staging smoke/realtime and production validation gates before switching traffic.
 
 No live credentials are stored in this repository. `.env.example` is the template; `.env.local` is intentionally ignored. Do not delete any existing Vercel project until the Cloudflare production URL is verified.
+
+## Monitoring
+
+Use GET /api/health for the private App Status Control Center. It is intentionally app-only and fast; it does not query Supabase or other dependencies. Use the authenticated operational health surface separately when dependency diagnostics are needed.
