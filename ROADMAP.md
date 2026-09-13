@@ -2576,6 +2576,7 @@ Second Party Room game (mode `snake_ladder` in `ROOM_MODES`). First of this batc
 - Virtual fallback is explicitly disabled for experience searches, and active-session claims/session forwarding retain the selected experience type for reconnect and Durable Object video-eligibility checks.
 - Frontend onboarding now shows a premium upsell or selectable experience chips, validates the selected type, and explains the premium requirement without changing the existing random-match path.
 - Added focused integration/UI/video-eligibility scripts under `scripts/` for the eventual verification pass; tests were intentionally not run per the current work instruction.
+- Follow-up hardening replaced the Experience upsell's static innerHTML construction with safe DOM APIs.
 - **Pending:** run the focused scripts in a configured staging environment, perform browser click-through/QA, and deploy/verify the Worker and Pages revisions before marking this production-ready.
 ## Up next
 - ~~Push `supabase/migrations/202608300031_realtime_stats_and_private_ads.sql` to Supabase~~ **RESOLVED**: confirmed via `supabase migration list --linked` on 2026-08-31 that every local migration through `202608310049` is applied remotely — nothing outstanding.
