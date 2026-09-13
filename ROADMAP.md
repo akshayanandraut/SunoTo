@@ -2570,6 +2570,13 @@ Second Party Room game (mode `snake_ladder` in `ROOM_MODES`). First of this batc
   - `worker/src/policies/membershipPolicy.js` (`normalizeMembershipConfig`) validates plan shape the same way `adPolicy.js`/`virtualPolicy.js` do for their configs.
 - Verified via `node --check` on every touched/created JS file. Migration not yet pushed to Supabase; no client UI built yet (plan picker, checkout, "redeem Sparks for days" button, "N days remaining" display).
 
+## Premium Surprise Match experiences — DONE, 2026-09-13
+- Added a fixed, validated experience catalog (`surprise_me`, `speed_date`, `candlelit_dinner`, `deep_talk`, `flirty_fun`, `adventure_chat`, `night_owl`, `weekend_plans`, `blind_video_date`) as a premium-only matching dimension.
+- Server normalization and authorization now reject non-premium experience searches, require exact same-type pairing, and force video mode for video-date experiences while preserving server-authoritative preference charging and fallback behavior.
+- Virtual fallback is explicitly disabled for experience searches, and active-session claims/session forwarding retain the selected experience type for reconnect and Durable Object video-eligibility checks.
+- Frontend onboarding now shows a premium upsell or selectable experience chips, validates the selected type, and explains the premium requirement without changing the existing random-match path.
+- Added focused integration/UI/video-eligibility scripts under `scripts/` for the eventual verification pass; tests were intentionally not run per the current work instruction.
+- **Pending:** run the focused scripts in a configured staging environment, perform browser click-through/QA, and deploy/verify the Worker and Pages revisions before marking this production-ready.
 ## Up next
 - ~~Push `supabase/migrations/202608300031_realtime_stats_and_private_ads.sql` to Supabase~~ **RESOLVED**: confirmed via `supabase migration list --linked` on 2026-08-31 that every local migration through `202608310049` is applied remotely — nothing outstanding.
 - ~~Games platform — blocked on currency name~~ **RESOLVED long ago** (Sparks); this bullet was stale. All originally-scoped solo/duo/trio/quad/multi game ideas from the 2026-08-31 brainstorm are now built and verified (see `QUESTIONS.md` "New game ideas" section) — Blind Auction, Tug of War Trivia, Elimination Reflex, Prediction Pool, and Streak Ladder.
