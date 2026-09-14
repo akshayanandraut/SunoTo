@@ -935,16 +935,42 @@ Every task below traces to a decision in `OPUS_DECISIONS.md` — read the matchi
 the reasoning before starting, and do not re-open the decision. Suggested order is listed at the bottom of that
 file: T-100 → T-095 → T-102 → T-096/T-097 → T-099 → T-103 → T-101 → T-098.
 
-- [ ] **T-095. Add `license` + `attribution_text` to radio tracks, then curate-import 60–100 commercially-licensed tracks.**
+- [x] **T-095a. Add `license` + `attribution_text` to radio tracks — infrastructure done 2026-09-14.**
   Decision A. Suno scraping is rejected permanently (SunoTo is ad- and subscription-funded, so redistribution is
-  commercial use regardless of intent). Add `license` and `attribution_text` columns to the radio tracks table via a
-  new migration, make both **required** in the admin upload form (`web/js/admin.js`, the `uploadRadioTrack`
-  multipart path in `web/js/admin-api.js`, and the `/admin/radio/tracks` handler in `worker/src/index.js`), and
-  display attribution in the radio player UI — CC-BY legally requires visible credit, so this is a compliance
-  requirement, not a nicety. Then import a curated library across the existing channels. **Allowed licenses only:**
-  CC0/public domain, CC-BY, Pixabay Music, ccMixter commercial-permitting, FMA tracks explicitly marked CC0/CC-BY.
-  **Reject CC-BY-NC** (we are commercial) and anything unlabeled. Do **not** build a recurring importer — an
-  ~80-track library loops fine below a few thousand listeners and an importer is pure ongoing maintenance for a
+  commercial use regardless of intent). Added `license` and `attribution_text` columns to `radio_tracks`
+  (`supabase/migrations/202609140001_radio_track_licensing.sql`), a fixed-list `check` constraint restricting
+  `license` to exactly `cc0, cc-by, pixabay, ccmixter, fma-cc-by, fma-cc0` (CC-BY-NC and unlabeled tracks aren't
+  rejected by pattern-matching free text — they simply aren't offered as an option, which is the more reliable
+  guarantee), and threaded both fields through `admin_submit_radio_track` (now requires both, raising
+  `invalid_track_license`/`invalid_track_attribution`), `next_radio_track`, and `list_radio_queue`. The **public**
+  user-submission path (`submit_radio_track`) is untouched — those tracks stay governed by the existing
+  `rights_attested` self-declaration, license/attribution stay null there, matching the decision's scope (this is
+  about admin-curated content specifically).
+  **Client**: `web/js/admin.js`'s bulk radio upload form (already a multi-file "select a folder" uploader) gained
+  a license `<select>` (options sourced from a new shared `worker/src/policies/radioLicensePolicy.js`, imported by
+  both the worker and the admin bundle — the same cross-import pattern `views.js` already uses for `ROOM_MODES`)
+  and a required attribution-text field, both applied to the whole batch. `web/js/views.js`'s radio player panel
+  now renders `track.attributionText` beneath the now-playing track whenever present — the actually-audible track
+  is the one that legally needs visible credit, so that's what's covered; queued-but-not-yet-playing tracks in the
+  sidebar don't show it, since nothing is being redistributed yet at that point.
+  **Verified**: `test/radio-track-licensing.test.js` (6 tests) covers the license list itself, `validRadioLicenseId`
+  rejecting anything outside the fixed set including `cc-by-nc`, and the migration SQL's column/constraint/RPC
+  shape. Pushed the migration to the live dev Supabase project (`supabase db push`) and called
+  `admin_submit_radio_track` directly against it three times: `cc-by-nc` → rejected with `invalid_track_license`
+  before touching anything else; a valid license with empty attribution → rejected with `invalid_track_attribution`;
+  a valid license with real attribution text → passed both checks and failed only on the expected fake room lookup,
+  confirming the validation order and that it's live, not just locally correct. Full test suite re-run clean (the
+  same pre-existing flaky/network-dependent failures as before, no new ones).
+  **Not done — deliberately left open, see T-095b below.**
+
+- [ ] **T-095b. Curate-import 60–100 commercially-licensed tracks using the infrastructure from T-095a.**
+  This is a content-sourcing task, not an engineering one: actually browsing CC0/CC-BY/Pixabay/ccMixter/FMA
+  libraries, picking ~60–100 real tracks across the existing channels, downloading the audio, and uploading each
+  through the now-ready admin form (license + attribution required per file/batch). Deliberately not attempted in
+  this pass — inventing placeholder "tracks" or guessing at real external audio files to download without the
+  user's involvement in picking what actually gets played on the platform would be worse than leaving this as a
+  clearly-scoped, ready-to-execute follow-up. Do **not** build a recurring importer — an ~80-track library loops
+  fine below a few thousand listeners and an importer is pure ongoing maintenance for a
   problem we do not have.
 
 - [ ] **T-096. Arena: strangers auto-join lobby (the actual "total strangers" experience).**

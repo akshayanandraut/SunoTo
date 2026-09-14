@@ -158,7 +158,7 @@ export class PartyRoomShard {
       await this.advanceRadioTrack(room);
     }
 
-    const currentTrack = room.currentTrack ? { title: room.currentTrack.title, artistName: room.currentTrack.artistName, durationSeconds: room.currentTrack.durationSeconds, elapsedSeconds: Math.max(0, Math.round(room.currentTrack.durationSeconds - (room.currentTrackEndsAt - Date.now()) / 1000)), listenerMessage: room.currentTrack.listenerMessage || null, mediaUrl: await this.mediaUrl(room.currentTrack.storageKey), artworkUrl: await this.mediaUrl(room.currentTrack.artworkKey) } : null;
+    const currentTrack = room.currentTrack ? { title: room.currentTrack.title, artistName: room.currentTrack.artistName, durationSeconds: room.currentTrack.durationSeconds, elapsedSeconds: Math.max(0, Math.round(room.currentTrack.durationSeconds - (room.currentTrackEndsAt - Date.now()) / 1000)), listenerMessage: room.currentTrack.listenerMessage || null, license: room.currentTrack.license || null, attributionText: room.currentTrack.attributionText || null, mediaUrl: await this.mediaUrl(room.currentTrack.storageKey), artworkUrl: await this.mediaUrl(room.currentTrack.artworkKey) } : null;
     const game = room.mode === "game" && room.game ? { status: room.game.status, drawerParticipantId: room.game.drawerParticipantId, wordLength: room.game.wordLength, phaseEndsAt: room.game.phaseEndsAt, scores: room.game.scores, roundsPlayed: room.game.roundsPlayed, totalRounds: room.game.totalRounds } : null;
     const snakeLadder = room.mode === "snake_ladder" && room.game ? { status: room.game.status, turnOrder: room.game.turnOrder, turnIndex: room.game.turnIndex, positions: room.game.positions, forfeited: room.game.forfeited, stakeCredits: room.game.stakeCredits, pot: room.game.pot, lastRoll: room.game.lastRoll, phaseEndsAt: room.game.phaseEndsAt } : null;
     const rummy = room.mode === "rummy" && room.game ? this.publicRummyState(room) : null;
@@ -347,7 +347,7 @@ export class PartyRoomShard {
         room.replayVotes = [];
         room.currentTrackEndsAt = Date.now() + (room.currentTrack.durationSeconds * 1000);
         await this.state.storage.put("room", room);
-        this.broadcast(event("RADIO_TRACK_REPLAY", { track: { title: room.currentTrack.title, artistName: room.currentTrack.artistName, durationSeconds: room.currentTrack.durationSeconds, elapsedSeconds: 0, listenerMessage: room.currentTrack.listenerMessage || null, mediaUrl: await this.mediaUrl(room.currentTrack.storageKey), artworkUrl: await this.mediaUrl(room.currentTrack.artworkKey) } }));
+        this.broadcast(event("RADIO_TRACK_REPLAY", { track: { title: room.currentTrack.title, artistName: room.currentTrack.artistName, durationSeconds: room.currentTrack.durationSeconds, elapsedSeconds: 0, listenerMessage: room.currentTrack.listenerMessage || null, license: room.currentTrack.license || null, attributionText: room.currentTrack.attributionText || null, mediaUrl: await this.mediaUrl(room.currentTrack.storageKey), artworkUrl: await this.mediaUrl(room.currentTrack.artworkKey) } }));
         await this.scheduleAlarm(room);
       }
       return;
@@ -2511,9 +2511,9 @@ export class PartyRoomShard {
     if (room.publicId) try { next = await this.radioService().nextTrack(room.publicId); } catch {}
     if (next) {
       room.curatedOnly = Boolean(next.curated_only);
-      room.currentTrack = { id: next.id, title: next.title, artistName: next.artist_name, storageKey: next.storage_key, artworkKey: next.artwork_key, durationSeconds: next.duration_seconds, listenerMessage: next.listener_message || null };
+      room.currentTrack = { id: next.id, title: next.title, artistName: next.artist_name, storageKey: next.storage_key, artworkKey: next.artwork_key, durationSeconds: next.duration_seconds, listenerMessage: next.listener_message || null, license: next.license || null, attributionText: next.attribution_text || null };
       room.currentTrackEndsAt = Date.now() + next.duration_seconds * 1000;
-      this.broadcast(event("RADIO_TRACK_CHANGED", { track: { title: next.title, artistName: next.artist_name, durationSeconds: next.duration_seconds, elapsedSeconds: 0, listenerMessage: next.listener_message || null, mediaUrl: await this.mediaUrl(next.storage_key), artworkUrl: await this.mediaUrl(next.artwork_key) } }));
+      this.broadcast(event("RADIO_TRACK_CHANGED", { track: { title: next.title, artistName: next.artist_name, durationSeconds: next.duration_seconds, elapsedSeconds: 0, listenerMessage: next.listener_message || null, license: next.license || null, attributionText: next.attribution_text || null, mediaUrl: await this.mediaUrl(next.storage_key), artworkUrl: await this.mediaUrl(next.artwork_key) } }));
     } else {
       room.currentTrack = null;
       room.currentTrackEndsAt = null;

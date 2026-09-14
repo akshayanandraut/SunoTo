@@ -27,6 +27,7 @@ import { FeedbackService } from "./services/FeedbackService.js";
 import { RateLimitShard } from "./durable/RateLimitShard.js";
 import { DailyAccessService } from "./services/DailyAccessService.js";
 import { RadioService } from "./services/RadioService.js";
+import { validRadioLicenseId } from "./policies/radioLicensePolicy.js";
 import { StreamingMembershipService } from "./services/StreamingMembershipService.js";
 import { VerificationService } from "./services/VerificationService.js";
 import { GamesService } from "./services/GamesService.js";
@@ -540,10 +541,14 @@ const flagsBlocked=await requireFlags(env,["live_world_enabled"]);if(flagsBlocke
       const title=String(form.get("title")||"").trim().slice(0,120);
       const artistName=String(form.get("artistName")||"").trim().slice(0,120);
       const durationSeconds=Math.round(Number(form.get("durationSeconds"))||0);
+      const license=String(form.get("license")||"").trim();
+      const attributionText=String(form.get("attributionText")||"").trim().slice(0,200);
       const audioFile=form.get("audio"),artworkFile=form.get("artwork");
       if(!/^[0-9a-fA-F-]{36}$/.test(roomPublicId))return Response.json({error:"invalid_room"},{status:400});
       if(!title)return Response.json({error:"invalid_track_title"},{status:400});
       if(!Number.isFinite(durationSeconds)||durationSeconds<30||durationSeconds>900)return Response.json({error:"invalid_track_duration"},{status:400});
+      if(!validRadioLicenseId(license))return Response.json({error:"invalid_track_license"},{status:400});
+      if(!attributionText)return Response.json({error:"invalid_track_attribution"},{status:400});
       if(!(audioFile instanceof File)||audioFile.size<1000||audioFile.size>25*1024*1024)return Response.json({error:"invalid_audio_file"},{status:400});
       const audioBytes=new Uint8Array(await audioFile.arrayBuffer());
       const audioExt=looksLikeAudio(audioBytes);
@@ -561,7 +566,7 @@ const flagsBlocked=await requireFlags(env,["live_world_enabled"]);if(flagsBlocke
       await env.RADIO_BUCKET.put(storageKey,audioBytes,{httpMetadata:{contentType:audioFile.type||"audio/mpeg"}});
       const service=new RadioService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch});
       try{
-        const result=await service.rpc("admin_submit_radio_track",{target_room_public_id:roomPublicId,target_title:title,target_artist_name:artistName||null,target_storage_key:storageKey,target_artwork_key:artworkKey,target_duration_seconds:durationSeconds});
+        const result=await service.rpc("admin_submit_radio_track",{target_room_public_id:roomPublicId,target_title:title,target_artist_name:artistName||null,target_storage_key:storageKey,target_artwork_key:artworkKey,target_duration_seconds:durationSeconds,target_license:license,target_attribution_text:attributionText});
         return Response.json(result?.[0]||null);
       }catch(error){
         await env.RADIO_BUCKET.delete(storageKey).catch(()=>{});if(artworkKey)await env.RADIO_BUCKET.delete(artworkKey).catch(()=>{});
@@ -574,7 +579,7 @@ const flagsBlocked=await requireFlags(env,["live_world_enabled"]);if(flagsBlocke
       const response=await supabaseRest(env,user,"/rpc/list_radio_queue",{method:"POST",body:JSON.stringify({target_room_public_id:radioQueueMatch[1]})});
       if(!response.ok)return Response.json({error:"radio_queue_failed"},{status:400});
       const rows=await response.json();
-      return Response.json({tracks:rows.map(row=>({id:row.id,title:row.title,artistName:row.artist_name,artworkUrl:row.artwork_key?`/api/v1/radio-media/${row.artwork_key}`:null,durationSeconds:row.duration_seconds,status:row.status,listenerMessage:row.listener_message}))});
+      return Response.json({tracks:rows.map(row=>({id:row.id,title:row.title,artistName:row.artist_name,artworkUrl:row.artwork_key?`/api/v1/radio-media/${row.artwork_key}`:null,durationSeconds:row.duration_seconds,status:row.status,listenerMessage:row.listener_message,license:row.license,attributionText:row.attribution_text}))});
     }
     if(request.method==="POST"&&radioQueueMatch){
       const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});if(!user.emailVerified)return Response.json({error:"email_verification_required"},{status:403});
