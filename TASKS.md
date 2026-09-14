@@ -1030,12 +1030,67 @@ file: T-100 → T-095 → T-102 → T-096/T-097 → T-099 → T-103 → T-101 �
   the flag back to `false` afterward. Full test suite re-run clean (328 pass, same pre-existing flaky failures as
   every other task this session).
 
-- [ ] **T-098. (Design only, do not build yet) Arena at 100 players.**
-  Decision C2. Only after T-096/T-097 are live and there is real player volume. Three things are required and must
-  be designed together: (1) **grid-cell interest management** — relay position only to players within ~60 m
-  instead of to everyone; (2) **drop to ~5 Hz** with client-side dead-reckoning interpolation so movement still
-  looks smooth; (3) **binary delta encoding** instead of per-tick JSON. Log the design with measured numbers before
-  writing code. Do not attempt this as an incremental tweak to the 24-player relay.
+- [x] **T-098. (Design only — not built) Arena at 100 players.** — design produced 2026-09-14
+  Decision C2. This is the design log the decision asked for, using the real numbers from the T-096/T-097/T-099
+  implementation (`ARENA_SIZE=500` in `web/js/arena.js`, `ARENA_HALF_EXTENT=260` in `worker/src/policies/arenaPolicy.js`,
+  `STATE_BROADCAST_HZ=10`, `WALK_SPEED=4.2`/`SPRINT_MULTIPLIER=1.8`). **Not built.** Do not attempt this as an
+  incremental patch to `ArenaLobbyShard.js`'s current full-broadcast relay — the three pieces below share one
+  new message-dispatch path and would have to be redone if built separately.
+
+  **The problem, with real numbers.** Every `AVATAR_STATE` message is currently broadcast to every other
+  connected socket — O(N²) fan-out. At the shipped 24-player cap: 24 players × 10Hz = 240 inbound msg/sec,
+  broadcast to 23 others each = **~5,520 outbound msg/sec** (matches the figure already cited in T-097). At 100
+  players with the same naive relay: 100×10Hz=1,000 inbound, ×99 others = **~99,000 outbound msg/sec** — not a
+  small-percentage regression, an 18x jump that no single Durable Object should be expected to absorb blind.
+
+  **1. Grid-cell interest management — relay only to players within ~60 units.**
+  Divide the 500×500 world into a 9×9 grid of ~55.5-unit cells (500/9 ≈ 55.5, close enough to the ~60-unit
+  interest radius). On each `AVATAR_STATE`, look up the sender's cell (O(1)) and, if it changed since their last
+  update, move them between cell buckets. Broadcast only to sockets in the sender's cell **and its 8 neighbors**
+  (a 3×3 block) — the neighbor ring is required, not optional, because a straight single-cell radius would miss
+  players just across a cell boundary who are still within 60 units.
+  *Expected fan-out at 100 players, roughly uniform distribution*: 81 cells ÷ 100 players ≈ 1.23 players/cell;
+  a 3×3 neighborhood (9 cells) averages **~11 players**, versus 99 today — roughly a 9x cut. Recomputing the
+  earlier number: 1,000 inbound/sec × ~11 avg recipients ≈ **~11,000 outbound msg/sec** — about 2x the
+  already-proven 24-player load, not 18x.
+  *Known limitation, stated plainly*: this assumes roughly uniform spread. If everyone clusters into one
+  neighborhood (exactly what happens during a Red Light/Green Light round, where everyone converges toward the
+  same objective), that cluster's local fan-out reverts toward O(N²) for the players inside it. Grid
+  partitioning bounds the *average* case, not the *adversarial* one. A defensive backstop worth designing in
+  from the start: cap broadcast recipients per message (e.g., nearest 20 within the scanned cells) rather than
+  assuming the grid alone solves clustering.
+
+  **2. Drop to ~5Hz with client-side dead-reckoning interpolation.**
+  Halving the broadcast rate halves every number above again: ~11,000 → **~5,500 outbound msg/sec** at 100
+  players — landing almost exactly on the already-proven 24-player baseline. To keep motion smooth at 5Hz (a
+  position update every 200ms is visibly choppy without help), the client needs an interpolation buffer per
+  remote avatar: store the last two `(position, timestamp)` samples, derive a velocity vector, extrapolate
+  position every rendered frame between updates, and lerp toward each new authoritative sample as it arrives
+  rather than snapping to it. This is standard real-time-multiplayer practice, not novel engineering — the work
+  is adding that buffer to `web/js/arena.js`'s `applyRemoteState()`, not inventing the technique. One edge case
+  to design for explicitly: a player *entering* interest range for the first time has no prior sample to
+  extrapolate from and must hard-snap to their first received position, not interpolate from nothing.
+
+  **3. Binary delta encoding instead of per-tick JSON.**
+  A current `AVATAR_STATE` frame (`{"type":"AVATAR_STATE","payload":{"participantId":"<uuid>",...},"ts":...}`)
+  runs roughly 140-160 bytes as JSON text, dominated by the 36-byte UUID string and JSON punctuation/key
+  overhead. A packed binary frame — a server-assigned 2-byte connection-local index instead of the UUID, 16-bit
+  fixed-point coordinates (more than enough precision inside the ±260 bound), a 2-byte fixed-point yaw, a 1-byte
+  action enum (5 values), and a 2-byte timestamp delta — comes to roughly **13-20 bytes**, an 8-10x size cut per
+  message. WebSocket already supports binary frames natively in both browsers and the Workers runtime
+  (`socket.send(arrayBuffer)`), so this is purely a codec added to `ArenaLobbyShard.js` and
+  `web/js/arena-lobby-client.js`/`arena.js` — the low-frequency control-plane messages (`READY`, chat, RLGG
+  round events) stay JSON, distinguished on receipt by `typeof event.data`.
+  **Combined effect**: 9x (interest) × 2x (rate) × 8x (encoding) ≈ **~150x total bytes/sec reduction** versus the
+  naive 100-player full-broadcast-JSON baseline — the kind of margin that makes 100 players comfortably
+  feasible, where any single one of these three alone would still leave real risk.
+
+  **Rollout plan when this is actually built**: raise `app_config.arena.maxPlayers` (already live from T-097) in
+  small steps — 24 → 40 → 60 → 100 — validating real measured load (message latency, DO CPU-ms per
+  `webSocketMessage` invocation) at each tier with a synthetic bot-driven load test before advancing, rather than
+  jumping straight to 100 on the strength of this arithmetic alone. **Trigger to start building, mirroring
+  T-103's SFU trigger discipline**: only once T-096/T-097 are live in production and the 24-player cap is being
+  hit often enough in practice to justify it — not speculatively.
 
 - [x] **T-099. Arena: Red Light / Green Light, with 5-minute scheduled round starts.** — done 2026-09-14
   Decision C3. Built exactly as scoped: no new physics, just a phase timer and a movement check against the
