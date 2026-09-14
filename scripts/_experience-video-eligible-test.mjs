@@ -8,6 +8,13 @@ const vars = Object.fromEntries(
 );
 const ANON_KEY = "sb_publishable_7JwfinWsnZ7W1mAKUi0sFw_pV4j4FjE";
 const API_BASE = "http://127.0.0.1:8787/api/v1";
+const createdUserIds = [];
+
+async function deleteTestUsers() {
+  for (const userId of createdUserIds) {
+    await fetch(`${vars.SUPABASE_URL}/auth/v1/admin/users/${userId}`, { method: "DELETE", headers: { apikey: vars.SUPABASE_SERVICE_ROLE_KEY, authorization: `Bearer ${vars.SUPABASE_SERVICE_ROLE_KEY}` } }).catch(() => {});
+  }
+}
 
 async function createTestUser(label) {
   const email = `exp-video-${label}-${Date.now()}@mailinator.com`;
@@ -27,6 +34,7 @@ async function createTestUser(label) {
     method: "POST", headers: { apikey: ANON_KEY, "content-type": "application/json" }, body: JSON.stringify({ email, password }),
   });
   const signIn = await signInRes.json();
+  createdUserIds.push(data.id);
   return { userId: data.id, email, accessToken: signIn.access_token };
 }
 
@@ -95,4 +103,4 @@ function waitFor(events, predicate, timeoutMs = 5000) {
 
   c1.socket.close(); c2.socket.close();
   console.log("\nPASS: Experience-type video date bypasses the video-beta config gate and both sides receive VIDEO_ELIGIBLE.");
-})().catch(err => { console.error("TEST FAILED:", err.message); process.exit(1); });
+})().catch(err => { console.error("TEST FAILED:", err.message); process.exitCode = 1; }).finally(deleteTestUsers);

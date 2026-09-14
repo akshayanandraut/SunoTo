@@ -8,6 +8,13 @@ const vars = Object.fromEntries(
 );
 const ANON_KEY = "sb_publishable_7JwfinWsnZ7W1mAKUi0sFw_pV4j4FjE";
 const API_BASE = "http://127.0.0.1:8787/api/v1";
+const createdUserIds = [];
+
+async function deleteTestUsers() {
+  for (const userId of createdUserIds) {
+    await fetch(`${vars.SUPABASE_URL}/auth/v1/admin/users/${userId}`, { method: "DELETE", headers: { apikey: vars.SUPABASE_SERVICE_ROLE_KEY, authorization: `Bearer ${vars.SUPABASE_SERVICE_ROLE_KEY}` } }).catch(() => {});
+  }
+}
 
 async function createTestUser(label, { premium = false } = {}) {
   const email = `exp-test-${label}-${Date.now()}@mailinator.com`;
@@ -29,6 +36,7 @@ async function createTestUser(label, { premium = false } = {}) {
     method: "POST", headers: { apikey: ANON_KEY, "content-type": "application/json" }, body: JSON.stringify({ email, password }),
   });
   const signIn = await signInRes.json();
+  createdUserIds.push(data.id);
   return { userId: data.id, email, accessToken: signIn.access_token };
 }
 
@@ -102,4 +110,4 @@ async function pollResult(anonToken) {
   }
 
   console.log("\nPASS: Surprise Match experience-type matching fully verified — premium gate, same-type pairing, forced video for date-style types, strict type isolation.");
-})().catch(err => { console.error("TEST FAILED:", err.message); process.exit(1); });
+})().catch(err => { console.error("TEST FAILED:", err.message); process.exitCode = 1; }).finally(deleteTestUsers);
