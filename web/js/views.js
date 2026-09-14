@@ -350,6 +350,44 @@ const charadesPanel=(state,isHost)=>{
   return `<div id="charades-panel" class="no-copy-zone game-panel"><div class="field" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap"><div>${header}</div><div class="saved-list" style="min-width:150px"><p class="eyebrow">Scores</p>${scoreRows}</div></div>${choicePanel}<div class="chat-log" id="charades-log" style="max-height:160px;margin-top:10px" aria-live="polite"></div>${clueForm}${guessForm}</div>`;
 };
 
+const mafiaPanel=(state,isHost)=>{
+  const game=state.partyMafia||{status:"lobby"};
+  const status=game.status||"lobby";
+  const role=state.partyMafiaRole;
+  const you=state.partyParticipantId;
+  const alive=game.alive||[];
+  const iAmAlive=alive.includes(you);
+  const remaining=game.phaseEndsAt?Math.max(0,Math.round((game.phaseEndsAt-Date.now())/1000)):0;
+  const roster=alive.map(id=>`<div>${id===you?"You":escapeText(peerHandle(id))}${role?.role==="mafia"&&role.teammates?.includes(id)?" 🔪":""}</div>`).join("")||`<p class="muted">No one alive.</p>`;
+  const eliminatedRows=(game.eliminated||[]).map(item=>`<div>${item.participantId===you?"You":escapeText(peerHandle(item.participantId))} — <strong>${escapeText(item.role)}</strong> (${item.phase==="night"?"killed at night":item.phase==="day"?"voted out":"disconnected"})</div>`).join("");
+  if(status==="lobby"||status==="game_over"){
+    const header=status==="game_over"?`<p class="muted">Game over — <strong>${game.winner==="mafia"?"the Mafia won":"the villagers won"}</strong>.</p>`:`<p class="muted">A hidden social-deduction game. Needs 5–10 seated players. One Mafia per four players, a Detective from six players, a Doctor from eight. Each night the Mafia pick someone to eliminate; each day, everyone discusses and votes someone out. Villagers win by eliminating every Mafia member; the Mafia win once they're no longer outnumbered.</p>`;
+    return `<div id="mafia-panel" class="no-copy-zone game-panel">${header}${eliminatedRows?`<div class="saved-list" style="margin-top:10px"><p class="eyebrow">Last game</p>${eliminatedRows}</div>`:""}${isHost?`<button class="btn btn-primary" id="mafia-start-btn" type="button" style="margin-top:12px">${status==="game_over"?"Play again":"Start Mafia"}</button>`:`<p class="muted">Waiting for the host to start.</p>`}</div>`;
+  }
+  const investigation=state.partyMafiaInvestigation?`<p class="${state.partyMafiaInvestigation.isMafia?"storage-warning":"online"}">${escapeText(peerHandle(state.partyMafiaInvestigation.targetId))} is ${state.partyMafiaInvestigation.isMafia?"Mafia":"not Mafia"}.</p>`:"";
+  let actionPanel="";
+  if(!iAmAlive){
+    actionPanel=`<p class="muted">You've been eliminated — you can watch, but you can't act or vote anymore.</p>`;
+  } else if(status==="night"){
+    if(role?.role==="mafia"){
+      actionPanel=`<h3>Choose who the Mafia eliminates tonight</h3><div class="inline-form" style="flex-wrap:wrap">${alive.filter(id=>id!==you&&!role.teammates?.includes(id)).map(id=>`<button class="btn btn-ghost" data-mafia-night-target="${escapeText(id)}" type="button">${escapeText(peerHandle(id))}</button>`).join("")}</div>`;
+    } else if(role?.role==="detective"){
+      actionPanel=`<h3>Choose someone to investigate</h3><div class="inline-form" style="flex-wrap:wrap">${alive.filter(id=>id!==you).map(id=>`<button class="btn btn-ghost" data-mafia-night-target="${escapeText(id)}" type="button">${escapeText(peerHandle(id))}</button>`).join("")}</div>${investigation}`;
+    } else if(role?.role==="doctor"){
+      actionPanel=`<h3>Choose someone to protect tonight</h3><div class="inline-form" style="flex-wrap:wrap">${alive.map(id=>`<button class="btn btn-ghost" data-mafia-night-target="${escapeText(id)}" type="button">${id===you?"Yourself":escapeText(peerHandle(id))}</button>`).join("")}</div>`;
+    } else {
+      actionPanel=`<p class="muted">Night has fallen. The Mafia, Detective, and Doctor are making their moves — everyone else just waits.</p>`;
+    }
+  } else if(status==="day_discussion"){
+    actionPanel=`<p class="muted">Discuss what happened last night. Voting opens once discussion time runs out.</p>`;
+  } else if(status==="day_vote"){
+    const myVote=game.votes?.[you];
+    actionPanel=`<h3>Vote to eliminate someone</h3><div class="inline-form" style="flex-wrap:wrap">${alive.filter(id=>id!==you).map(id=>`<button class="btn ${myVote===id?"btn-primary":"btn-ghost"}" data-mafia-vote-target="${escapeText(id)}" type="button">${escapeText(peerHandle(id))}</button>`).join("")}<button class="btn ${myVote==="abstain"?"btn-primary":"btn-ghost"}" data-mafia-vote-target="abstain" type="button">Abstain</button></div><p class="muted" style="margin-top:8px">${Object.keys(game.votes||{}).length} of ${alive.length} have voted.</p>`;
+  }
+  const phaseLabel=status==="night"?"🌙 Night":status==="day_discussion"?"☀️ Day — discussion":"☀️ Day — vote";
+  return `<div id="mafia-panel" class="no-copy-zone game-panel"><div class="field" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap"><div><h3>${phaseLabel} · Round ${game.round||1}</h3><p class="muted">${remaining}s left${role?` · You are the <strong>${escapeText(role.role)}</strong>`:""}</p>${actionPanel}</div><div class="saved-list" style="min-width:150px"><p class="eyebrow">Alive (${alive.length})</p>${roster}</div></div><div class="chat-log" id="mafia-log" style="max-height:120px;margin-top:10px" aria-live="polite"></div></div>`;
+};
+
 const SNAKE_LADDER_TOKENS=["🔴","🔵","🟢","🟡"];
 // Visual-only copy of the server's tile map (worker/src/policies/snakeLadderBoard.js) for board rendering.
 const SL_LADDERS={4:14,9:31,20:38,28:84,40:59,51:67,63:81,71:91};
@@ -639,7 +677,7 @@ export const views = {
       const videoGrid=isVideo?`<div class="video-panel" id="party-video-grid">${(state.partyVideoParticipants||[]).length?"":'<p class="video-connecting">Waiting for others to join with video…</p>'}<video id="party-video-local" autoplay playsinline muted></video>${(state.partyVideoParticipants||[]).map(id=>`<video data-party-video="${escapeText(id)}" autoplay playsinline></video>`).join("")}${state.partyLocalVideoOn?`<button class="btn btn-ghost" id="party-video-mute-toggle" type="button" aria-label="Mute microphone" aria-pressed="false">🎤</button><button class="btn btn-ghost" id="party-video-camera-toggle" type="button" aria-label="Turn off camera" aria-pressed="false">📷</button>`:""}</div><button class="btn btn-ghost" id="party-start-video" type="button">${state.partyLocalVideoOn?"Video on":"Turn on camera & mic"}</button>`:"";
       const availableModes=state.featureFlags?.arena_enabled===false?ROOM_MODES.filter(item=>item.id!=="arena"):ROOM_MODES;
       const modeSwitcher=isHost?`<form id="party-mode-form" class="inline-form"><select name="mode">${availableModes.map(item=>`<option value="${item.id}" ${item.id===mode?"selected":""}>${escapeText(item.name)}</option>`).join("")}</select><button class="btn btn-ghost">Switch mode</button></form>`:`<p class="muted">Mode: ${escapeText(ROOM_MODES.find(item=>item.id===mode)?.name||mode)}</p>`;
-      const modePanel=mode==="game"?drawGuessPanel(state,isHost):mode==="snake_ladder"?snakeLadderPanel(state,isHost):mode==="rummy"?rummyPanel(state,isHost):mode==="ludo"?ludoPanel(state,isHost):mode==="teen_patti"?teenPattiPanel(state,isHost):mode==="andar_bahar"?andarBaharPanel(state,isHost):mode==="dragon_tiger"?dragonTigerPanel(state,isHost):mode==="bidding"?biddingPanel(state,isHost):mode==="tug_of_war"?tugOfWarPanel(state,isHost):mode==="elimination_reflex"?eliminationReflexPanel(state,isHost):mode==="prediction_pool"?predictionPoolPanel(state,isHost):mode==="charades"?charadesPanel(state,isHost):mode==="connect_four"?connectFourPanel(state,isHost):mode==="arena"?arenaPanel(state):"";
+      const modePanel=mode==="game"?drawGuessPanel(state,isHost):mode==="snake_ladder"?snakeLadderPanel(state,isHost):mode==="rummy"?rummyPanel(state,isHost):mode==="ludo"?ludoPanel(state,isHost):mode==="teen_patti"?teenPattiPanel(state,isHost):mode==="andar_bahar"?andarBaharPanel(state,isHost):mode==="dragon_tiger"?dragonTigerPanel(state,isHost):mode==="bidding"?biddingPanel(state,isHost):mode==="tug_of_war"?tugOfWarPanel(state,isHost):mode==="elimination_reflex"?eliminationReflexPanel(state,isHost):mode==="prediction_pool"?predictionPoolPanel(state,isHost):mode==="charades"?charadesPanel(state,isHost):mode==="connect_four"?connectFourPanel(state,isHost):mode==="arena"?arenaPanel(state):mode==="mafia"?mafiaPanel(state,isHost):"";
       const isRadio=room.roomType==="radio",track=state.partyCurrentTrack,votes=state.partyRadioVotes||{skipVotes:0,replayVotes:0,totalMembers:1};
       const queueTracks=state.partyQueueTracks||[];
       const queueSidebar=isRadio&&isMusic&&queueTracks.length?`<div class="saved-list" id="party-radio-queue" style="margin-top:14px"><p class="eyebrow">Playlist</p>${queueTracks.map(item=>`<article class="saved-item"><div>${item.status==="playing"?"▶ ":""}${escapeText(item.title)}${item.artistName?` <span class="muted">— ${escapeText(item.artistName)}</span>`:""}${item.listenerMessage?`<p class="muted" style="margin:2px 0 0">💬 ${escapeText(item.listenerMessage)}</p>`:""}</div></article>`).join("")}</div>`:"";

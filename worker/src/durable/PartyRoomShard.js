@@ -1,4 +1,5 @@
-import { HOST_INACTIVITY_TIMEOUT_SECONDS, MAX_ROOM_MEMBERS, DEFAULT_ROOM_MODE_ID, validRoomModeId, DRAW_GUESS_CHOOSE_SECONDS, DRAW_GUESS_ROUND_SECONDS, SNAKE_LADDER_TURN_SECONDS, RUMMY_TURN_SECONDS, LUDO_TURN_SECONDS, TEEN_PATTI_TURN_SECONDS, ANDAR_BAHAR_BETTING_SECONDS, DRAGON_TIGER_BETTING_SECONDS, BIDDING_ROUND_SECONDS, TUG_OF_WAR_QUESTION_SECONDS, TUG_OF_WAR_TARGET_SCORE, ELIMINATION_REFLEX_MIN_PLAYERS, ELIMINATION_REFLEX_MAX_PLAYERS, ELIMINATION_REFLEX_ARM_MIN_MS, ELIMINATION_REFLEX_ARM_MAX_MS, ELIMINATION_REFLEX_TAP_WINDOW_SECONDS, PREDICTION_POOL_ROUND_SECONDS, PREDICTION_POOL_DEFAULT_RANGE_MAX, CHARADES_CHOOSE_SECONDS, CHARADES_ROUND_SECONDS, CONNECT_FOUR_TURN_SECONDS, CONNECT_FOUR_ROWS, CONNECT_FOUR_COLS } from "../policies/partyRoomPolicy.js";
+import { HOST_INACTIVITY_TIMEOUT_SECONDS, MAX_ROOM_MEMBERS, DEFAULT_ROOM_MODE_ID, validRoomModeId, DRAW_GUESS_CHOOSE_SECONDS, DRAW_GUESS_ROUND_SECONDS, SNAKE_LADDER_TURN_SECONDS, RUMMY_TURN_SECONDS, LUDO_TURN_SECONDS, TEEN_PATTI_TURN_SECONDS, ANDAR_BAHAR_BETTING_SECONDS, DRAGON_TIGER_BETTING_SECONDS, BIDDING_ROUND_SECONDS, TUG_OF_WAR_QUESTION_SECONDS, TUG_OF_WAR_TARGET_SCORE, ELIMINATION_REFLEX_MIN_PLAYERS, ELIMINATION_REFLEX_MAX_PLAYERS, ELIMINATION_REFLEX_ARM_MIN_MS, ELIMINATION_REFLEX_ARM_MAX_MS, ELIMINATION_REFLEX_TAP_WINDOW_SECONDS, PREDICTION_POOL_ROUND_SECONDS, PREDICTION_POOL_DEFAULT_RANGE_MAX, CHARADES_CHOOSE_SECONDS, CHARADES_ROUND_SECONDS, CONNECT_FOUR_TURN_SECONDS, CONNECT_FOUR_ROWS, CONNECT_FOUR_COLS, MAFIA_NIGHT_SECONDS, MAFIA_DAY_DISCUSSION_SECONDS, MAFIA_DAY_VOTE_SECONDS } from "../policies/partyRoomPolicy.js";
+import { MAFIA_MIN_PLAYERS, MAFIA_MAX_PLAYERS, MAFIA_ROLES, assignMafiaRoles, resolveMafiaNight, resolveMafiaDayVote, checkMafiaWinner } from "../policies/mafiaEngine.js";
 import { randomTugOfWarQuestion, TUG_OF_WAR_QUESTIONS as TUG_OF_WAR_QUESTIONS_REF } from "../policies/tugOfWarQuestions.js";
 import { DRAW_GUESS_WORDS } from "../policies/drawGuessWords.js";
 import { SNAKE_LADDER_TILES, SNAKE_LADDER_MIN_PLAYERS, SNAKE_LADDER_MAX_PLAYERS, SNAKE_LADDER_BOARD_SIZE } from "../policies/snakeLadderBoard.js";
@@ -171,7 +172,13 @@ export class PartyRoomShard {
     const eliminationReflex = room.mode === "elimination_reflex" && room.game ? this.publicEliminationReflexState(room, participantId) : null;
     const predictionPool = room.mode === "prediction_pool" && room.game ? this.publicPredictionPoolState(room, participantId) : null;
     const charades = room.mode === "charades" && room.game ? { status: room.game.status, performerParticipantId: room.game.performerParticipantId, wordLength: room.game.wordLength, phaseEndsAt: room.game.phaseEndsAt, scores: room.game.scores, roundsPlayed: room.game.roundsPlayed, totalRounds: room.game.totalRounds } : null;
-    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour }));
+    const mafia = room.mode === "mafia" && room.game ? this.publicMafiaState(room) : null;
+    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia }));
+    if (room.mode === "mafia" && room.game?.roles?.[participantId] && room.game.alive.includes(participantId)) {
+      const role = room.game.roles[participantId];
+      const mafiaIds = Object.entries(room.game.roles).filter(([, r]) => r === MAFIA_ROLES.MAFIA).map(([id]) => id);
+      server.send(event("MAFIA_ROLE", { role, teammates: role === MAFIA_ROLES.MAFIA ? mafiaIds.filter(id => id !== participantId) : undefined }));
+    }
     if (room.mode === "rummy" && room.game?.status === "playing" && room.game.hands[participantId] && !room.game.forfeited.includes(participantId)) {
       this.sendRummyHand(room, participantId);
     }
@@ -221,6 +228,16 @@ export class PartyRoomShard {
 
     // Ephemeral only: room chat/signaling/metadata are relayed, never persisted.
     if (type === "ROOM_MESSAGE" && attachment.seated && typeof payload.text === "string" && payload.text.length <= 1000) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode === "mafia" && room.game && room.game.status !== "lobby" && room.game.status !== "game_over") {
+        const alive = room.game.alive || [];
+        if (!alive.includes(attachment.participantId)) return; // eliminated players can't speak
+        if (room.game.status === "night") {
+          if (room.game.roles?.[attachment.participantId] !== MAFIA_ROLES.MAFIA) return; // only mafia talk during the night
+          this.broadcastToMafia(room, event("ROOM_MESSAGE", { from: attachment.participantId, text: payload.text, mafiaOnly: true }), socket);
+          return;
+        }
+      }
       this.broadcast(event("ROOM_MESSAGE", { from: attachment.participantId, text: payload.text }), socket);
       return;
     }
@@ -300,6 +317,10 @@ export class PartyRoomShard {
         }
         if (room.mode === "connect_four" && room.game.status === "playing") {
           this.broadcast(event("MESSAGE_REJECTED", { code: "connect_four_round_in_progress" }));
+          return;
+        }
+        if (room.mode === "mafia" && ["night", "day_discussion", "day_vote"].includes(room.game.status)) {
+          this.broadcast(event("MESSAGE_REJECTED", { code: "mafia_round_in_progress" }));
           return;
         }
         room.game = null;
@@ -1206,6 +1227,56 @@ export class PartyRoomShard {
       socket.send(event("PREAUTHORIZE_ACCEPTED", { targetAccountUserId: payload.targetAccountUserId }));
       return;
     }
+    if (type === "MAFIA_START" && attachment.isHost) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "mafia") return;
+      if (room.game && room.game.status !== "game_over") return;
+      const connectedIds = new Set(this.state.getWebSockets().map(s => (s.deserializeAttachment() || {}).participantId).filter(Boolean));
+      const players = (room.seatedParticipantIds || []).filter(id => connectedIds.has(id));
+      if (players.length < MAFIA_MIN_PLAYERS || players.length > MAFIA_MAX_PLAYERS) {
+        socket.send(event("MESSAGE_REJECTED", { code: "mafia_needs_five_to_ten_players" }));
+        return;
+      }
+      const roles = assignMafiaRoles(players);
+      room.game = { status: "night", round: 1, roles, alive: players.slice(), mafiaTargets: {}, detectiveCheck: null, doctorProtect: null, votes: {}, winner: null, phaseEndsAt: Date.now() + MAFIA_NIGHT_SECONDS * 1000 };
+      await this.state.storage.put("room", room);
+      this.sendMafiaRoles(room);
+      this.broadcastMafiaState(room);
+      await this.scheduleAlarm(room);
+      return;
+    }
+
+    if (type === "MAFIA_NIGHT_ACTION" && typeof payload.targetId === "string") {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "mafia" || !room.game || room.game.status !== "night") return;
+      const myId = attachment.participantId, myRole = room.game.roles?.[myId];
+      if (!room.game.alive.includes(myId) || !room.game.alive.includes(payload.targetId)) return;
+      if (myRole === MAFIA_ROLES.MAFIA) room.game.mafiaTargets[myId] = payload.targetId;
+      else if (myRole === MAFIA_ROLES.DETECTIVE) room.game.detectiveCheck = { detectiveId: myId, targetId: payload.targetId };
+      else if (myRole === MAFIA_ROLES.DOCTOR) room.game.doctorProtect = payload.targetId;
+      else return;
+      await this.state.storage.put("room", room);
+      if (myRole === MAFIA_ROLES.DETECTIVE) {
+        const detectiveSocket = this.socketFor(myId);
+        if (detectiveSocket) detectiveSocket.send(event("MAFIA_INVESTIGATION_RESULT", { targetId: payload.targetId, isMafia: room.game.roles[payload.targetId] === MAFIA_ROLES.MAFIA }));
+      }
+      await this.maybeResolveMafiaNight(room);
+      return;
+    }
+
+    if (type === "MAFIA_VOTE" && (typeof payload.targetId === "string" || payload.targetId === "abstain")) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "mafia" || !room.game || room.game.status !== "day_vote") return;
+      const myId = attachment.participantId;
+      if (!room.game.alive.includes(myId)) return;
+      if (payload.targetId !== "abstain" && !room.game.alive.includes(payload.targetId)) return;
+      room.game.votes[myId] = payload.targetId;
+      await this.state.storage.put("room", room);
+      this.broadcastMafiaState(room);
+      await this.maybeResolveMafiaVote(room);
+      return;
+    }
+
     if (["AUDIO_OFFER", "AUDIO_ANSWER", "AUDIO_ICE_CANDIDATE", "VIDEO_OFFER", "VIDEO_ANSWER", "VIDEO_ICE_CANDIDATE"].includes(type)) {
       if (!attachment.seated) return;
       const targetId = payload.targetParticipantId;
@@ -1221,6 +1292,125 @@ export class PartyRoomShard {
 
   broadcast(payload, exclude) {
     for (const socket of this.state.getWebSockets()) if (socket !== exclude) try { socket.send(payload); } catch {}
+  }
+
+  broadcastToMafia(room, payload, exclude) {
+    for (const socket of this.state.getWebSockets()) {
+      if (socket === exclude) continue;
+      const socketAttachment = socket.deserializeAttachment() || {};
+      if (room.game.roles?.[socketAttachment.participantId] === MAFIA_ROLES.MAFIA && (room.game.alive || []).includes(socketAttachment.participantId)) {
+        try { socket.send(payload); } catch {}
+      }
+    }
+  }
+
+  sendMafiaRoles(room) {
+    const mafiaIds = Object.entries(room.game.roles).filter(([, role]) => role === MAFIA_ROLES.MAFIA).map(([id]) => id);
+    for (const [participantId, role] of Object.entries(room.game.roles)) {
+      const socket = this.socketFor(participantId);
+      if (!socket) continue;
+      try { socket.send(event("MAFIA_ROLE", { role, teammates: role === MAFIA_ROLES.MAFIA ? mafiaIds.filter(id => id !== participantId) : undefined })); } catch {}
+    }
+  }
+
+  publicMafiaState(room) {
+    const game = room.game;
+    return { status: game.status, round: game.round, alive: game.alive, eliminated: game.eliminated || [], votes: game.votes, winner: game.winner, phaseEndsAt: game.phaseEndsAt };
+  }
+
+  broadcastMafiaState(room) {
+    this.broadcast(event("MAFIA_STATE", this.publicMafiaState(room)));
+  }
+
+  async maybeResolveMafiaNight(room) {
+    const aliveMafia = room.game.alive.filter(id => room.game.roles[id] === MAFIA_ROLES.MAFIA);
+    const mafiaDone = aliveMafia.every(id => room.game.mafiaTargets[id]);
+    const aliveDetective = room.game.alive.find(id => room.game.roles[id] === MAFIA_ROLES.DETECTIVE);
+    const detectiveDone = !aliveDetective || room.game.detectiveCheck?.detectiveId === aliveDetective;
+    const aliveDoctor = room.game.alive.find(id => room.game.roles[id] === MAFIA_ROLES.DOCTOR);
+    const doctorDone = !aliveDoctor || room.game.doctorProtect;
+    if (mafiaDone && detectiveDone && doctorDone) await this.resolveMafiaNightPhase(room);
+  }
+
+  async resolveMafiaNightPhase(room) {
+    const { killedId } = resolveMafiaNight({ roles: room.game.roles, alive: room.game.alive, mafiaTargets: room.game.mafiaTargets, doctorProtect: room.game.doctorProtect });
+    if (killedId) {
+      room.game.alive = room.game.alive.filter(id => id !== killedId);
+      room.game.eliminated = [...(room.game.eliminated || []), { participantId: killedId, role: room.game.roles[killedId], phase: "night", round: room.game.round }];
+    }
+    room.game.mafiaTargets = {};
+    room.game.detectiveCheck = null;
+    room.game.doctorProtect = null;
+    const winner = checkMafiaWinner({ roles: room.game.roles, alive: room.game.alive });
+    if (winner) {
+      room.game.status = "game_over";
+      room.game.winner = winner;
+      room.game.phaseEndsAt = null;
+      await this.state.storage.put("room", room);
+      this.broadcast(event("MAFIA_NIGHT_RESULT", { killedId, killedRole: killedId ? room.game.eliminated.at(-1).role : null }));
+      this.broadcastMafiaState(room);
+      return;
+    }
+    room.game.status = "day_discussion";
+    room.game.votes = {};
+    room.game.phaseEndsAt = Date.now() + MAFIA_DAY_DISCUSSION_SECONDS * 1000;
+    await this.state.storage.put("room", room);
+    this.broadcast(event("MAFIA_NIGHT_RESULT", { killedId, killedRole: killedId ? room.game.eliminated.at(-1).role : null }));
+    this.broadcastMafiaState(room);
+    await this.scheduleAlarm(room);
+  }
+
+  async maybeResolveMafiaVote(room) {
+    if (room.game.alive.every(id => room.game.votes[id] !== undefined)) await this.resolveMafiaDayVotePhase(room);
+  }
+
+  async resolveMafiaDayVotePhase(room) {
+    const { eliminatedId } = resolveMafiaDayVote({ alive: room.game.alive, votes: room.game.votes });
+    if (eliminatedId) {
+      room.game.alive = room.game.alive.filter(id => id !== eliminatedId);
+      room.game.eliminated = [...(room.game.eliminated || []), { participantId: eliminatedId, role: room.game.roles[eliminatedId], phase: "day", round: room.game.round }];
+    }
+    const winner = checkMafiaWinner({ roles: room.game.roles, alive: room.game.alive });
+    if (winner) {
+      room.game.status = "game_over";
+      room.game.winner = winner;
+      room.game.phaseEndsAt = null;
+      await this.state.storage.put("room", room);
+      this.broadcast(event("MAFIA_DAY_RESULT", { eliminatedId, eliminatedRole: eliminatedId ? room.game.eliminated.at(-1).role : null }));
+      this.broadcastMafiaState(room);
+      return;
+    }
+    room.game.status = "night";
+    room.game.round += 1;
+    room.game.votes = {};
+    room.game.mafiaTargets = {};
+    room.game.detectiveCheck = null;
+    room.game.doctorProtect = null;
+    room.game.phaseEndsAt = Date.now() + MAFIA_NIGHT_SECONDS * 1000;
+    await this.state.storage.put("room", room);
+    this.broadcast(event("MAFIA_DAY_RESULT", { eliminatedId, eliminatedRole: eliminatedId ? room.game.eliminated.at(-1).role : null }));
+    this.broadcastMafiaState(room);
+    await this.scheduleAlarm(room);
+  }
+
+  async handleMafiaDisconnect(participantId) {
+    const room = (await this.state.storage.get("room")) || {};
+    if (room.mode !== "mafia" || !room.game || !room.game.alive?.includes(participantId)) return;
+    room.game.alive = room.game.alive.filter(id => id !== participantId);
+    room.game.eliminated = [...(room.game.eliminated || []), { participantId, role: room.game.roles[participantId], phase: "disconnect", round: room.game.round }];
+    const winner = checkMafiaWinner({ roles: room.game.roles, alive: room.game.alive });
+    if (winner) {
+      room.game.status = "game_over";
+      room.game.winner = winner;
+      room.game.phaseEndsAt = null;
+      await this.state.storage.put("room", room);
+      this.broadcastMafiaState(room);
+      return;
+    }
+    await this.state.storage.put("room", room);
+    this.broadcastMafiaState(room);
+    if (room.game.status === "night") await this.maybeResolveMafiaNight(room);
+    else if (room.game.status === "day_vote") await this.maybeResolveMafiaVote(room);
   }
 
   pickWordChoices() {
@@ -2250,6 +2440,7 @@ export class PartyRoomShard {
     await this.handleLudoDisconnect(attachment.participantId);
     await this.handleTeenPattiDisconnect(attachment.participantId);
     await this.handleConnectFourDisconnect(attachment.participantId);
+    await this.handleMafiaDisconnect(attachment.participantId);
     this.broadcast(event("MEMBER_LEFT", { participantId: attachment.participantId }));
   }
 
@@ -2388,6 +2579,16 @@ export class PartyRoomShard {
         await this.beginCluePhase(room, room.game.choices[0]);
       } else if (room.mode === "charades" && room.game.status === "describing") {
         await this.endCharadesRound(room);
+      } else if (room.mode === "mafia" && room.game.status === "night") {
+        await this.resolveMafiaNightPhase(room);
+      } else if (room.mode === "mafia" && room.game.status === "day_discussion") {
+        room.game.status = "day_vote";
+        room.game.phaseEndsAt = Date.now() + MAFIA_DAY_VOTE_SECONDS * 1000;
+        await this.state.storage.put("room", room);
+        this.broadcastMafiaState(room);
+        await this.scheduleAlarm(room);
+      } else if (room.mode === "mafia" && room.game.status === "day_vote") {
+        await this.resolveMafiaDayVotePhase(room);
       }
       return;
     }

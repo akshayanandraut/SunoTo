@@ -32,6 +32,7 @@ export const ROOM_MODES=[
   {id:"charades",name:"Charades (text)"},
   {id:"connect_four",name:"Connect Four"},
   {id:"arena",name:"Arena (early prototype, premium)"},
+  {id:"mafia",name:"Mafia (social deduction)"},
 ];
 export const DRAW_GUESS_CHOOSE_SECONDS=15;
 export const DRAW_GUESS_ROUND_SECONDS=75;
@@ -56,6 +57,9 @@ export const PREDICTION_POOL_DEFAULT_RANGE_MAX=100;
 export const CONNECT_FOUR_TURN_SECONDS=20;
 export const CONNECT_FOUR_ROWS=6;
 export const CONNECT_FOUR_COLS=7;
+export const MAFIA_NIGHT_SECONDS=30;
+export const MAFIA_DAY_DISCUSSION_SECONDS=90;
+export const MAFIA_DAY_VOTE_SECONDS=30;
 export const DEFAULT_ROOM_MODE_ID="chat";
 
 export function roomTypeById(id){return ROOM_TYPES.find(type=>type.id===id)||null;}

@@ -1052,6 +1052,72 @@ file: T-100 → T-095 → T-102 → T-096/T-097 → T-099 → T-103 → T-101 �
   `npx wrangler deploy --config worker/wrangler.toml`. Not fixable from the repo; no API access from the dev
   environment.
 
+- [x] **T-105. Build Mafia as a new Party Room game mode.** — done 2026-09-14
+  User asked for "other games like mafia/among us" and "build it smartly." Among Us specifically implies a
+  movement/proximity/task engine — that's Arena's engine, not this file's, and building it would have meant a
+  premium-gated, much larger project for a feature that isn't the point of the request. The point of "Mafia/Among
+  Us" is the social-deduction gameplay (hidden roles, private night actions, public accusation and voting) — that
+  needed none of Arena's 3D movement and fits the exact same lightweight, server-relayed game-mode pattern already
+  used for Charades/Bidding/Elimination Reflex. Built that: real Mafia, no staking (kept it free and social,
+  deliberately sidestepping the whole `game_staking_enabled`/real-money legal question — see Decision D — since
+  nothing about this game needed it).
+  **Design**: `worker/src/policies/mafiaEngine.js` (new, pure and unit-tested independent of the Durable Object) —
+  `assignMafiaRoles` (one Mafia per 4 players minimum 1, a Detective from 6 players, a Doctor from 8, everyone
+  else Villager), `resolveMafiaNight` (mafia kill by strict plurality — a tie or split vote kills no one; the
+  Doctor's protection cancels a kill; mafia can't target each other), `resolveMafiaDayVote` (elimination by strict
+  plurality; a tie eliminates no one; self-votes are ignored), `checkMafiaWinner` (villagers win once every mafia
+  is dead; mafia win once no longer outnumbered).
+  **Wiring** (`worker/src/durable/PartyRoomShard.js`): new `"mafia"` room mode (5–10 seated players, capped at
+  `MAX_ROOM_MEMBERS`); `MAFIA_START` (host-only) assigns roles and privately delivers each player's role (plus
+  teammate identities, for mafia) via `socketFor(id).send(...)`, never in the shared broadcast state;
+  `MAFIA_NIGHT_ACTION` handles all three night roles (mafia kill target, detective investigate, doctor protect)
+  and auto-resolves the night the moment every required role has acted, without waiting for the timer;
+  `MAFIA_VOTE` collects day votes and auto-resolves once everyone alive has voted. Reused the existing
+  `scheduleAlarm`/`alarm()` phase-timeout dispatch for the case where players don't act in time (night resolves
+  with whatever votes came in, discussion auto-advances to voting, an unresolved vote is tallied as-is).
+  Eliminated/disconnected players' roles are revealed on death (standard house rule) via `MAFIA_NIGHT_RESULT`/
+  `MAFIA_DAY_RESULT`; a disconnect mid-game (`handleMafiaDisconnect`, wired into `webSocketClose`) removes the
+  player from `alive` and can immediately end the game if it decides the win condition, exactly like a normal
+  elimination.
+  **Real gap this required fixing, not a pre-existing hole**: mafia night chat needed to be genuinely private to
+  living mafia members (not just hidden by the UI) — the generic `ROOM_MESSAGE` handler broadcasts to everyone
+  seated with no concept of sub-groups. Added a `broadcastToMafia()` relay and a `room.mode==="mafia"` branch in
+  `ROOM_MESSAGE` that (a) drops messages from eliminated players entirely and (b) during the night phase, routes
+  a mafia member's message only to other living mafia sockets, tagged `mafiaOnly:true`. This is the first party
+  game in this file with asymmetric-audience chat; every other mode's chat goes to the whole room.
+  **Client**: `web/js/views.js`'s new `mafiaPanel` covers lobby/start, per-role night action buttons (kill /
+  investigate / protect, each filtered to valid targets — mafia can't target teammates, everyone else can target
+  anyone alive), live day-vote buttons with a running "N of M voted" count, an alive roster (marking mafia
+  teammates for a mafia player), and a game-over screen revealing the full elimination log with roles. Eliminated
+  players see a clear "you can watch but not act" state instead of stale action buttons. `web/js/app.js` wires
+  `MAFIA_ROLE`/`MAFIA_STATE`/`MAFIA_INVESTIGATION_RESULT`/`MAFIA_NIGHT_RESULT`/`MAFIA_DAY_RESULT` and the two new
+  `MESSAGE_REJECTED` codes (`mafia_needs_five_to_ten_players`, `mafia_round_in_progress`), following the exact
+  per-game state/log pattern already established for Charades (`state.partyMafia`, a `mafiaLog` narration array
+  restored on render, same as `charadesLog`).
+  **Verified**: `test/mafia-engine.test.js` (15 tests) covers role-count math at every player count, night
+  resolution including the doctor-save and split-vote-kills-no-one cases, day-vote plurality/tie/abstain/self-vote
+  handling, and both win conditions — all against the real exported functions, not reimplementations.
+  `test/mafia-party-room.test.js` (6 tests) instantiates the real `PartyRoomShard` class against a mocked DO
+  state/socket set (same technique as `test/arena-live-world-flags.test.js`) and drives it through
+  `webSocketMessage`/`webSocketClose` directly: rejects too few players, rejects a non-host start, assigns the
+  correct role mix to 6 and 8 players, plays a full night-kill → day-vote → win flow end to end, confirms night
+  chat is genuinely private to mafia teammates and invisible to villagers, and confirms a disconnect mid-game
+  removes the player and can trigger a win. Ran the full existing test suite before and after — no new failures;
+  the same pre-existing flaky/network-dependent script failures (`scripts/_experience-*-test.mjs`, ad-policy,
+  presence, hardening) reproduce identically on a clean `git stash`, confirmed not caused by this change.
+  **The second half of the request — "that game where everyone is given a word and they have to describe it" —
+  is already built.** That's exactly what Charades does in this codebase already (`CHARADES_START`/
+  `CHARADES_WORD_CHOICE`/`CHARADES_CLUE`/`CHARADES_GUESS` in this same file): one performer per turn privately
+  gets a secret word and must convey it via typed clues that are rejected if they contain the word itself, while
+  everyone else guesses — round-robin across all seated players. Building a second game under a new name with
+  the identical mechanic would have been pure duplication, so the smarter call was to build the genuinely missing
+  game (Mafia) and flag this rather than ship a reskin. If what was actually wanted is a *distinct* word game —
+  e.g. "Undercover"/"Word Wolf," where every player privately gets a word but one or two players secretly get a
+  slightly different one, everyone gives one clue per round, and the group votes out who they think has the odd
+  word out — that's a real, different, sensible complement to both Charades and this Mafia build (it reuses the
+  same private-role-delivery and day-vote patterns just added for Mafia), but it's a distinct scoping decision,
+  not something to guess into existence unrequested. Flagged for the user rather than built.
+
 ### Decisions that closed tasks without creating work (see `OPUS_DECISIONS.md`)
 
 - **T-062, T-063** — closed, not building simulated radio listeners/chat. Superseded by T-102.
