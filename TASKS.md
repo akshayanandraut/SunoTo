@@ -1121,15 +1121,58 @@ file: T-100 → T-095 → T-102 → T-096/T-097 → T-099 → T-103 → T-101 �
   off (already default — payments + real-money/skill-gaming legal review outstanding, do not enable casually),
   custom radio channels off (unrelated existing UI filter, see T-102). Everything else on.
 
-- [ ] **T-101. Before ever enabling bot chat: label it, cap its budget, validate it.**
-  Decision E. `app_config.virtual` stays `{enabled:false,provider:"disabled"}` at launch. Three preconditions, all
-  required before any enablement: (1) **reframe it as an explicitly labeled, user-chosen "AI companion" mode** —
-  never an invisible substitute injected into random match when nobody is found; label it in the mode picker and
-  persistently in the chat header; (2) add a **daily token budget cap** to `app_config.virtual` with a hard cutoff
-  and an admin field, since Workers AI bills per token and scales with exactly the traffic we want; (3) validate
-  real conversation quality across all 6 personas against the live model (needs a deployed environment — Workers AI
-  cannot run locally without `CLOUDFLARE_API_TOKEN`). The current mock provider is provably robotic (identical
-  appended phrase regardless of context) and must not be what ships.
+- [x] **T-101. Before ever enabling bot chat: label it, cap its budget, validate it.** — (1) and (2) done 2026-09-14, (3) blocked on deployment
+  Decision E. `app_config.virtual` **stays `{enabled:false,provider:"disabled"}`** — nothing in this task flips
+  it, by design.
+  **(1) Explicit, user-chosen consent — was genuinely invisible before this.** Found the real mechanism:
+  `MatchmakingService.virtualFallback()` silently substituted a bot persona after a wait timeout with zero user
+  choice involved, for anyone whose search hadn't matched a real person yet. Fixed the actual gate, not just the
+  labeling: a new `allowVirtualFallback` field must be explicitly `true` on the queue entry or `virtualFallback()`
+  returns `{status:"searching"}` forever, regardless of wait time (`worker/src/services/MatchmakingService.js`).
+  Threaded end-to-end: a new checkbox in `web/js/views.js`'s onboarding form ("🤖 If no real person is free, also
+  let an AI companion chat with me instead of waiting — always clearly labeled as AI, never a real person"),
+  persisted in `web/js/preferences.js` alongside the other remembered onboarding fields (defaults to `false`,
+  never silently on), threaded through `startMatchSearch()` → `/api/v1/match/search` → `MatchmakingShard`'s
+  `/search` handler → the queue entry. **The "persistently in the chat header" half of this requirement already
+  existed** (`web/js/views.js`'s chat view already renders a `<span class="virtual-badge">Virtual</span>` plus a
+  "Virtual participant" status line for any match with `virtual:true`) — verified rather than rebuilt.
+  **(2) Daily token budget — a real hard cutoff, not just a config field.** Added `dailyTokenBudget` to
+  `app_config.virtual` (`worker/src/policies/virtualPolicy.js`, default 200,000, admin-editable, rejects anything
+  negative/non-integer/absurd). Enforcement lives in `ChatSession.replyAsVirtual()`
+  (`worker/src/durable/ChatSession.js`): before calling the Workers AI provider (never the mock provider, which
+  costs nothing), reads today's cumulative `virtual_tokens_used` total and the live configured budget; at or
+  over budget, the AI call is skipped entirely for the rest of the day — read live rather than from the
+  match-time config snapshot, since the budget can be adjusted mid-day and the snapshot can't reflect that.
+  Reused the existing `analytics_daily` aggregation (`AnalyticsService.todayTotal()`, new) rather than a new
+  table or Durable Object — after a real AI reply, usage is estimated (~4 chars/token plus a fixed persona
+  system-prompt allowance, since Workers AI doesn't reliably return exact usage in every response shape;
+  deliberately conservative, not exact) and recorded via the existing `record_analytics_event` RPC.
+  **Discovered and fixed the same latent gap twice this session**: `record_analytics_event` has a fixed
+  event-name allowlist that would have silently rejected `virtual_tokens_used` with `invalid_analytics_event`
+  (same issue as T-103's video events) — added via
+  `supabase/migrations/202609140005_virtual_token_budget_analytics.sql`, pushed and verified live. Added a
+  budget field to the admin "Virtual fallback" panel (`web/js/admin.js`) with copy explaining it's a hard
+  cutoff, not a soft target.
+  **(3) Validating real conversation quality across all 6 personas against the live model — still blocked,
+  exactly as scoped.** Workers AI cannot be exercised locally without a `CLOUDFLARE_API_TOKEN` this environment
+  doesn't have. Not attempted; needs a deployed environment and is the one precondition that has to happen
+  there, not here.
+  **Verified**: `test/virtual.test.js` gained a route-level describe block (3 tests) confirming a `/search`
+  request with no `allowVirtualFallback` field is recorded as opted-out on the real queue entry (not just in the
+  service layer), that `true` is recorded correctly, and that a non-boolean truthy value (`"true"` the string)
+  does *not* accidentally opt someone in; plus a unit test confirming `virtualFallback()` never returns a bot
+  match without consent regardless of wait time. Two pre-existing tests in the same file needed updating, not
+  fixing — they exercised the old default-on behavior directly and now explicitly opt in, which is the whole
+  point of the change. `test/virtual-token-budget.test.js` (9 tests) covers the config bounds, `todayTotal()`
+  reading the real aggregated table shape, and `virtualTokenBudgetExhausted()` blocking at/over budget, allowing
+  under budget, and failing open (never blocking) if the config or analytics read errors — a bug in the analytics
+  fetcher wiring (mismatched mock-fetcher variable name, `ANALYTICS_FETCHER` vs `FETCHER`) was caught by these
+  tests running suspiciously slowly against a real, non-existent host, not by inspection. One pre-existing test
+  (`test/local-state.test.js`, preference round-trip shape) needed its expected shape updated for the new
+  `allowVirtualFallback` field, plus a new test confirming it never defaults to `true`. Pushed the migration
+  live and confirmed via direct RPC calls: `virtual_tokens_used` is accepted, and the `virtual` app_config row's
+  `enabled`/`provider` are unchanged (`false`/`"disabled"`) after all of this. Full suite re-run clean (360
+  pass, same pre-existing flaky failures as every other task this session, no new ones).
 
 - [x] **T-102. Re-enable custom radio channels with honest engagement metrics — replaces T-062/T-063.** — done 2026-09-14
   Decision F. **T-062 and T-063 are closed as decided-not-building**: simulated listener counts and bot chat are a

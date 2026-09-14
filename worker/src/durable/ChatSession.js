@@ -12,6 +12,11 @@ import { videoEligible } from "../policies/videoPolicy.js";
 import { StreamingMembershipService } from "../services/StreamingMembershipService.js";
 const PARTICIPANTS_KEY="participants",SESSION_KEY="session";
 function virtualPeerFrom(value){if(!value||value.length>6000)return null;try{const peer=JSON.parse(value);return peer?.identityId&&peer?.persona&&peer?.config?peer:null}catch{return null}}
+// Workers AI doesn't hand back exact token usage in every response shape, so this is a deliberately
+// conservative ~4-chars-per-token estimate (plus a fixed allowance for the persona system prompt,
+// which is billed too) -- good enough for a safety budget, not meant to be exact.
+const VIRTUAL_PROMPT_OVERHEAD_TOKENS=150;
+function estimateReplyTokens(inputText,replyText){return VIRTUAL_PROMPT_OVERHEAD_TOKENS+Math.ceil((String(inputText||"").length+String(replyText||"").length)/4);}
 function isCurrentConnection(session,attachment){const participant=session.participants?.[attachment?.participantId];return Boolean(participant&&(!participant.connectionId||!attachment.connectionId||participant.connectionId===attachment.connectionId));}
 function compactEndedSession(session){const retained=new Set(["sessionId","ended","matchReleased","matchReleaseIdentity","pendingMessageReversals"]);for(const key of Object.keys(session))if(!retained.has(key))delete session[key];return session;}
 export function migrateParticipantIdentity(session,previousIdentityId,participantId){if(!previousIdentityId||previousIdentityId===participantId)return session;session.participants??={};session.participants[participantId]={...(session.participants[previousIdentityId]||{}),...(session.participants[participantId]||{})};delete session.participants[previousIdentityId];for(const key of ["disconnects","trialConsumed","continueAccepted","contactUnlockAccepted","likes","messageRate","contactState"]){const values=session[key];if(!values||!Object.hasOwn(values,previousIdentityId))continue;values[participantId]=values[previousIdentityId];delete values[previousIdentityId];}return session;}
@@ -82,7 +87,23 @@ const previousExperienceType=previous.experienceType||experienceType||null;if(re
     if(delivered)await this.recordAnalytics(`photo:${session.sessionId}:${event.eventId}`,"paid_photo_sent","paid");
   }
   async reverseUndeliveredMessage(session,eventId){const pending=session.pendingMessageReversals?.[eventId];if(!pending)return;await new WalletService({url:this.env.SUPABASE_URL,serviceKey:this.env.SUPABASE_SERVICE_ROLE_KEY,fetcher:this.env.FETCHER||fetch}).apply({userId:pending.userId,delta:pending.amount,type:"paid_message_reversal",reason:"Undelivered paid chat message",idempotencyKey:`message-reversal:${session.sessionId}:${eventId}:${pending.userId}`,metadata:{sessionId:session.sessionId,eventId}});delete session.pendingMessageReversals[eventId];if(!Object.keys(session.pendingMessageReversals).length)delete session.pendingMessageReversals;}
-  async replyAsVirtual(socket,text,session){const provider=createVirtualParticipantProvider(this.env,session.virtualPeer.config,this.env.VIRTUAL_RANDOM||Math.random),reply=await provider.reply(text,session.virtualPeer.persona);if(!reply)return;const safety=checkContactMessage(reply,{}),safeReply=safety.blocked?"tell me more?":reply;socket.send(serverEvent("PEER_TYPING",{typing:true}));await virtualDelay(session.virtualPeer.persona,this.env.VIRTUAL_RANDOM||Math.random,this.env.VIRTUAL_WAITER);socket.send(serverEvent("PEER_TYPING",{typing:false}));socket.send(serverEvent("MESSAGE_RECEIVED",{from:session.virtualPeer.identityId,text:safeReply,virtual:true}));}
+  // Workers AI bills per token and scales with exactly the traffic we want -- a hard daily budget
+  // cutoff (app_config.virtual.dailyTokenBudget) is a precondition for ever enabling this provider
+  // (T-101), checked live here rather than baked into the match-time config snapshot, since the
+  // budget can change mid-day. The mock provider costs nothing and is never gated.
+  async replyAsVirtual(socket,text,session){
+    if(session.virtualPeer.config.provider==="workers-ai"&&await this.virtualTokenBudgetExhausted())return;
+    const provider=createVirtualParticipantProvider(this.env,session.virtualPeer.config,this.env.VIRTUAL_RANDOM||Math.random),reply=await provider.reply(text,session.virtualPeer.persona);if(!reply)return;const safety=checkContactMessage(reply,{}),safeReply=safety.blocked?"tell me more?":reply;socket.send(serverEvent("PEER_TYPING",{typing:true}));await virtualDelay(session.virtualPeer.persona,this.env.VIRTUAL_RANDOM||Math.random,this.env.VIRTUAL_WAITER);socket.send(serverEvent("PEER_TYPING",{typing:false}));socket.send(serverEvent("MESSAGE_RECEIVED",{from:session.virtualPeer.identityId,text:safeReply,virtual:true}));
+    if(session.virtualPeer.config.provider==="workers-ai")await this.recordAnalytics(`virtual-tokens:${crypto.randomUUID()}`,"virtual_tokens_used","total",estimateReplyTokens(text,safeReply));
+  }
+  async virtualTokenBudgetExhausted(){
+    if(!this.env?.SUPABASE_URL||!this.env?.SUPABASE_SERVICE_ROLE_KEY)return false;
+    try{
+      const config=(await new ConfigService(this.env,this.env.FETCHER||fetch).virtual()).config;
+      const usedToday=await new AnalyticsService(this.env,this.env.FETCHER||fetch).todayTotal("virtual_tokens_used");
+      return usedToday>=config.dailyTokenBudget;
+    }catch{return false;}
+  }
   async checkSpam(identityId,sessionId,text){if(!this.env?.ANONYMOUS||text.trim().length<20)return{allowed:true};const normalized=text.toLowerCase().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"").trim(),digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(normalized)),fingerprint=[...new Uint8Array(digest)].slice(0,12).map(value=>value.toString(16).padStart(2,"0")).join(""),namespace=this.env.ANONYMOUS,stub=namespace.get(namespace.idFromName("global")),response=await stub.fetch("https://anonymous.internal/spam-fingerprint",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({identityId,sessionId,fingerprint})});return response.json();}
   async flagEnabled(key){try{return(await new ConfigService(this.env,this.env.FETCHER||fetch).flags()).config[key]!==false;}catch{return true}}
   handleVideoSignal(socket,session,event){if(session.ended||session.virtualPeer||!session.videoEligible)return socket.send(serverEvent("MESSAGE_REJECTED",{code:"video_unavailable"}));this.sendToPeers(socket,event.type,event.payload);}

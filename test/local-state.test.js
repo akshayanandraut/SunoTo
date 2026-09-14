@@ -16,7 +16,8 @@ describe("anonymous local identity",()=>{
 });
 
 describe("remembered preferences",()=>{
-  it("round trips only the local onboarding fields",()=>{const storage=memoryStorage();savePreferences({age:"24",gender:"Other",name:"A",languages:["English"],interests:["Music"]},storage);assert.deepEqual(loadPreferences(storage),{age:24,gender:"Other",name:"A",languages:["English"],interests:["Music"]});});
+  it("round trips only the local onboarding fields",()=>{const storage=memoryStorage();savePreferences({age:"24",gender:"Other",name:"A",languages:["English"],interests:["Music"]},storage);assert.deepEqual(loadPreferences(storage),{age:24,gender:"Other",name:"A",languages:["English"],interests:["Music"],allowVirtualFallback:false});});
+  it("round trips the explicit AI-companion opt-in (T-101) -- never defaults to true",()=>{const storage=memoryStorage();savePreferences({age:"24",gender:"Other",name:"A",languages:["English"],interests:["Music"],allowVirtualFallback:true},storage);assert.equal(loadPreferences(storage).allowVirtualFallback,true);assert.equal(loadPreferences(memoryStorage()).allowVirtualFallback,false);});
 });
 
 describe("same-browser tab lease",()=>{

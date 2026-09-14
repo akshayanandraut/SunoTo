@@ -8,7 +8,8 @@ export function loadPreferences(storage = localStorage) {
       gender: ["Male", "Female", "Other"].includes(value.gender) ? value.gender : "",
       name: String(value.name ?? "").replace(/[&<>"']/g, "").slice(0, 24),
       languages: Array.isArray(value.languages) ? value.languages.slice(0, 3) : [],
-      interests: Array.isArray(value.interests) ? value.interests.slice(0, 5) : []
+      interests: Array.isArray(value.interests) ? value.interests.slice(0, 5) : [],
+      allowVirtualFallback: value.allowVirtualFallback === true
     };
   } catch { return {}; }
 }
@@ -16,7 +17,7 @@ export function loadPreferences(storage = localStorage) {
 export function savePreferences(profile, storage = localStorage) {
   const safe = {
     age: Number(profile.age), gender: profile.gender, name: String(profile.name ?? "").replace(/[&<>"']/g, "").slice(0, 24),
-    languages: [...profile.languages], interests: [...profile.interests]
+    languages: [...profile.languages], interests: [...profile.interests], allowVirtualFallback: profile.allowVirtualFallback === true
   };
   storage.setItem(KEY, JSON.stringify(safe));
   return safe;

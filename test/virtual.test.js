@@ -5,6 +5,7 @@ import { MatchmakingService } from "../worker/src/services/MatchmakingService.js
 import { MockVirtualParticipantProvider } from "../worker/src/services/VirtualParticipantProvider.js";
 import { normalizeVirtualConfig,selectVirtualPersona } from "../worker/src/policies/virtualPolicy.js";
 import { ChatSession } from "../worker/src/durable/ChatSession.js";
+import { MatchmakingShard } from "../worker/src/durable/MatchmakingShard.js";
 
 const persona={personaId:"quiet-river",handle:"QuietRiver482",age:24,gender:"Other",region:"India",languages:["English"],interests:["Music"],tone:"casual",verbosity:"short",curiosity:.7,humor:.4,delayMinMs:0,delayMaxMs:0,activeHours:[]};
 const config=normalizeVirtualConfig({enabled:true,provider:"mock",model:"",maxConcurrent:2,fallbackSeconds:15,greetProbability:.5,greetings:["hi","hie","hey"],personas:[persona]});
@@ -14,9 +15,36 @@ function roomState(socket,session){const values=new Map([["session",session]]);r
 
 describe("virtual fallback matchmaking",()=>{
   it("waits fifteen seconds and still gives an arriving human priority",()=>{const service=new MatchmakingService();service.search(user("identity-a"),()=>0);assert.equal(service.virtualFallback("identity-a",config,()=>14999).status,"searching");const human=service.search(user("identity-b"),()=>15000,()=>"human-session");assert.equal(human.peerId,"identity-a");assert.equal(human.virtual,undefined);});
-  it("creates a clearly marked zero-fee virtual match only after fallback, with a fresh reddit-style handle each time",()=>{const service=new MatchmakingService();service.search(user("identity-a"),()=>0);const result=service.virtualFallback("identity-a",config,()=>15000,()=>"virtual-session",()=>0);assert.equal(result.virtual,true);assert.match(result.virtualProfile.handle,/^[A-Za-z]+[A-Za-z]+\d+$/);assert.notEqual(result.virtualProfile.handle,persona.handle);assert.equal(result.preferenceFee,0);assert.equal(service.active["identity-a"].virtualPeer.persona.personaId,"quiet-river");});
-  it("waits the full paid preference timeout",()=>{const service=new MatchmakingService();service.search(user("identity-a",{preferences:{gender:"Female"}}),()=>0);assert.equal(service.virtualFallback("identity-a",config,()=>29999).status,"searching");assert.equal(service.virtualFallback("identity-a",config,()=>30000,()=>"virtual-session",()=>0).virtual,true);});
+  it("never falls back to a virtual persona unless the user explicitly opted in",()=>{const service=new MatchmakingService();service.search(user("identity-a"),()=>0);assert.equal(service.virtualFallback("identity-a",config,()=>999999).status,"searching");assert.equal(service.active["identity-a"],undefined);});
+  it("creates a clearly marked zero-fee virtual match only after fallback, with a fresh reddit-style handle each time -- and only for a user who opted in",()=>{const service=new MatchmakingService();service.search(user("identity-a",{allowVirtualFallback:true}),()=>0);const result=service.virtualFallback("identity-a",config,()=>15000,()=>"virtual-session",()=>0);assert.equal(result.virtual,true);assert.match(result.virtualProfile.handle,/^[A-Za-z]+[A-Za-z]+\d+$/);assert.notEqual(result.virtualProfile.handle,persona.handle);assert.equal(result.preferenceFee,0);assert.equal(service.active["identity-a"].virtualPeer.persona.personaId,"quiet-river");});
+  it("waits the full paid preference timeout",()=>{const service=new MatchmakingService();service.search(user("identity-a",{allowVirtualFallback:true,preferences:{gender:"Female"}}),()=>0);assert.equal(service.virtualFallback("identity-a",config,()=>29999).status,"searching");assert.equal(service.virtualFallback("identity-a",config,()=>30000,()=>"virtual-session",()=>0).virtual,true);});
   it("uses persona active hours in IST",()=>{const scheduled=normalizeVirtualConfig({...config,personas:[{...persona,activeHours:[6]}]});assert.equal(selectVirtualPersona(scheduled,()=>0,0),null);assert.equal(selectVirtualPersona(scheduled,()=>0,1800000).personaId,"quiet-river");});
+});
+
+describe("virtual fallback requires explicit consent at the real /search route (T-101)",()=>{
+  function makeShard(){const values=new Map(),state={storage:{get:key=>values.get(key),put:(key,value)=>values.set(key,structuredClone(value))}};return new MatchmakingShard(state,{});}
+  const search=(shard,body)=>shard.fetch(new Request("https://match.internal/search",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}));
+  it("a search request with no allowVirtualFallback field never gets a bot, no matter how long it waits",async()=>{
+    const shard=makeShard();
+    await search(shard,{identityId:"identity-a",profile:{age:25,gender:"Male",languages:["English"],interests:[]}});
+    const savedState=(await shard.state.storage.get("matchmaking_state"))||{};
+    const queued=(savedState.queue||[]).find(item=>item.identityId==="identity-a");
+    assert.equal(queued.allowVirtualFallback,false);
+  });
+  it("a search request with allowVirtualFallback:true is recorded as opted in on the queue entry",async()=>{
+    const shard=makeShard();
+    await search(shard,{identityId:"identity-a",allowVirtualFallback:true,profile:{age:25,gender:"Male",languages:["English"],interests:[]}});
+    const savedState=(await shard.state.storage.get("matchmaking_state"))||{};
+    const queued=(savedState.queue||[]).find(item=>item.identityId==="identity-a");
+    assert.equal(queued.allowVirtualFallback,true);
+  });
+  it("a non-boolean truthy value in the request body does not accidentally opt someone in",async()=>{
+    const shard=makeShard();
+    await search(shard,{identityId:"identity-a",allowVirtualFallback:"true",profile:{age:25,gender:"Male",languages:["English"],interests:[]}});
+    const savedState=(await shard.state.storage.get("matchmaking_state"))||{};
+    const queued=(savedState.queue||[]).find(item=>item.identityId==="identity-a");
+    assert.equal(queued.allowVirtualFallback,false);
+  });
 });
 
 describe("natural virtual conversation boundary",()=>{
