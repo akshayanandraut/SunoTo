@@ -869,45 +869,37 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
 
 ### Radio bot-listener / bot-chat simulation
 
-- [ ] **T-062. Design the bot-listener/bot-chat simulation for future custom radio channels.**
-  User's stated plan (`QUESTIONS.md` line 168): future channel hosts should get simulated bot listeners and bot
-  chat activity so hosting a new channel feels engaged from day one, before custom/user-hosted channels are
-  re-enabled (currently gated to "Custom channels — coming soon"). Design (don't build yet): how many simulated
-  listeners appear and how they ramp/decay over a session (the existing smoothed-random-walk pattern in
-  `web/js/radio-active-users.js`'s `nextRadioListenerCount` is a good reference for "looks organic, not robotic"
-  motion — reuse that technique rather than a flat/fake-looking number), and what bot chat messages would say and
-  how often, without it reading as deceptive to a host who knows their real audience size (this is adjacent to
-  the "fabricated social proof" dark-pattern concern already raised and refused once in this project for the
-  chance-games epic — read `QUESTIONS.md`'s "Chance games... refused in original form" section before designing
-  this, and make sure whatever you design here is clearly framed as ambient atmosphere for a new/empty room, not
-  a claim of real listener counts, to avoid the same dark-pattern problem in a new form).
+- [x] **T-062. Design the bot-listener/bot-chat simulation for future custom radio channels.** — decided
+  2026-09-14, closed without building
+  Superseded by Decision F / T-102: not building this. Simulated listeners and bot chat are a deception aimed
+  precisely at the one person (the host) most able to detect it. Replaced with honest cumulative metrics (total
+  listens, listens today, what's queued next) instead — see T-102.
 
-- [ ] **T-063. Build the bot-listener/bot-chat simulation per the design from T-062, then re-enable custom radio channel creation.**
-  Only attempt after T-062. Re-enable the "Radio (public)" room type in the create-room dropdown
-  (`web/js/views.js`, currently filtered out via `ROOM_TYPES.filter(type=>type.id!=="radio")`) and replace the
-  "Custom channels — coming soon" card with a real directory once bot engagement is in place.
+- [x] **T-063. Build the bot-listener/bot-chat simulation per the design from T-062, then re-enable custom radio
+  channel creation.** — done differently 2026-09-14, see T-102
+  The "re-enable custom radio channel creation" half of this shipped as T-102, without the bot-simulation half
+  (declined per T-062 above). `ROOM_TYPES` is unfiltered again and the "Custom channels — coming soon" card was
+  replaced with a real directory — using true metrics, not simulated engagement.
 
 ### Group video for Party Rooms (blocks full-group-video Charades)
 
-- [ ] **T-064. Research and decide the group-video approach for Party Rooms (mesh vs SFU).**
-  The only WebRTC path today (`web/js/video-call.js`) is 1:1 mesh, used in random chat. Party rooms need up to
-  10 simultaneous video participants (`MAX_ROOM_MEMBERS=10`), which is impractical as a full mesh (each peer
-  would need up to 9 simultaneous connections). Research options given this stack is Cloudflare
-  Workers/Durable-Objects-based: Cloudflare Calls (SFU-as-a-service, first-party fit for a Cloudflare Workers
-  app), a self-hosted SFU, or a capped mesh (e.g. only the first N video participants get video, rest are
-  audio/chat-only) as a cheaper interim. Log a recommendation with tradeoffs (cost, given this project's
-  standing "minimize infra cost, offload to clients" directive; implementation complexity; latency) before
-  building anything.
+- [x] **T-064. Research and decide the group-video approach for Party Rooms (mesh vs SFU).** — decided 2026-09-14
+  Decision G: capped mesh now (4 publishers), Cloudflare Realtime/Calls deferred behind a measurable trigger
+  (>20% of sessions hitting the cap). Implemented as T-103, which also instruments that exact trigger so the SFU
+  decision is data-driven later rather than guessed at. See T-103 for the full implementation.
 
-- [ ] **T-065. Implement group video signaling in `PartyRoomShard.js` per the approach chosen in T-064.**
-  Extend beyond the current 1:1 `VIDEO_OFFER`/`VIDEO_ANSWER`/`VIDEO_ICE_CANDIDATE` pattern to however many-peers
-  the chosen approach needs (SFU: one connection per peer to the SFU; mesh: N-1 connections per peer with
-  renegotiation on join/leave).
+- [x] **T-065. Implement group video signaling in `PartyRoomShard.js` per the approach chosen in T-064.** — done
+  as part of T-103 (2026-09-14)
+  T-103 delivered exactly this: `VIDEO_START`/`VIDEO_STOP` signaling extending the existing 1:1
+  `VIDEO_OFFER`/`VIDEO_ANSWER`/`VIDEO_ICE_CANDIDATE` pattern to the capped-mesh approach T-064 decided on (4
+  publishers, N-1 connections per peer, renegotiation on join/leave via `PARTY_VIDEO_PUBLISHER_JOINED`/`_LEFT`).
+  See T-103's write-up for the full detail, including the real "turning your camera on after others already
+  joined" gap it found and fixed along the way. Not a separate task — closing this one as delivered by that work
+  rather than duplicating the write-up here.
 
-- [ ] **T-066. Build the group video UI (grid of video tiles) for Party Rooms.**
-  `web/js/views.js`/`web/js/app.js` — a responsive grid of participant video tiles for the party room view, with
-  the same mute/camera-toggle/connecting-indicator UX already built for 1:1 video (`web/js/video-call.js`
-  `setTrackEnabled`) extended to each tile.
+- [x] **T-066. Build the group video UI (grid of video tiles) for Party Rooms.** — already existed, confirmed
+  2026-09-14
+  Turns out `web/js/views.js`'s `#party-video-grid` was **already** a real multi-tile grid (`(state.partyVideoParticipants||[]).map(id=>...<video data-party-video>...)`), not a 1:1-only view — this requirement was already satisfied before T-103 touched anything. T-103 added the cap indicator ("N/4 cameras in use") and button relabeling on top of the existing grid. Nothing left to build here.
 
 - [ ] **T-067. Build full-group-video Charades on top of the group video infra from T-064–T-066.**
   Only attempt after group video exists. This was the original request that text-based Charades (already built
@@ -917,25 +909,22 @@ creation `gen_random_bytes`/camelCase bugs), then log what you found and fixed.
 
 ## SECTION 6 — P3: Unconfirmed / optional future ideas (low priority, not re-confirmed by the user recently)
 
-- [ ] **T-070. (Optional, not confirmed) Scrabble multiplayer party-room game.**
-  The original games-epic brainstorm mentioned "Scrabble/Ludo/Snake & Ladder/Rummy" as candidate multiplayer
-  board games. Ludo, Snake & Ladder, and Rummy are all built and live; Scrabble was never revisited in the later
-  2026-08-31 brainstorm (which produced Bidding/Tug of War/Elimination Reflex/Prediction Pool/Streak Ladder
-  instead) and was not explicitly re-requested. Treat as a low-priority backlog idea only — if you pick this up,
-  scope it properly first (Scrabble's tile-rack/board/dictionary-validation complexity is significantly higher
-  than any game built so far in this app) rather than assuming it fits the existing lightweight game patterns.
+- [x] **T-070. (Optional, not confirmed) Scrabble multiplayer party-room game.** — decided 2026-09-14, declined
+  Superseded by Decision H in `OPUS_DECISIONS.md`: declined. Dictionary/tile-rack/board complexity is an order
+  of magnitude above any game built in this app so far, Ludo/Snake & Ladder/Rummy already cover the board-game
+  slot, and it was never re-requested after the original brainstorm. Not building it.
 
-- [ ] **T-071. (Optional cleanup, explicitly judged not worth it before) Remove dead `publicRadioRooms` plumbing.**
-  `state.publicRadioRooms` and `partyApi.publicRadioRooms` in `web/js/app.js` are unused now that the custom
-  radio directory was removed (`QUESTIONS.md` line 172 explicitly judged this "harmless unused plumbing, not
-  worth touching further right now"). Only clean this up if you're already touching this exact file for another
-  task — not worth a dedicated pass on its own.
+- [x] **T-071. (Optional cleanup, explicitly judged not worth it before) Remove dead `publicRadioRooms` plumbing.**
+  — resolved 2026-09-14, turned out not to be dead after all
+  Superseded by T-102: re-enabling custom radio channels reused this exact plumbing
+  (`state.publicRadioRooms`/`partyApi.publicRadioRooms` in `web/js/app.js`, `GET /api/v1/party-rooms/public`) to
+  power the real custom-channel directory. It's live, load-bearing code now — nothing left to clean up.
 
-- [ ] **T-072. (Optional audit) Decide whether `roomType:"radio"` should be fully removed from the backend or intentionally left reachable.**
-  The UI can no longer create a `radio`-type room (dropdown option removed), but the backend RPCs/policy still
-  technically accept `roomType:"radio"` if called directly. This was judged low-risk to leave as-is
-  (`QUESTIONS.md` line 169) since nothing in the UI can trigger it. Revisit only if T-063 (re-enabling custom
-  channels) happens, at which point this becomes load-bearing again rather than dead code.
+- [x] **T-072. (Optional audit) Decide whether `roomType:"radio"` should be fully removed from the backend or
+  intentionally left reachable.** — resolved 2026-09-14
+  Resolved by T-102 re-enabling custom channel creation: the backend `roomType:"radio"` path is reachable on
+  purpose again — `web/js/views.js`'s `creatableRoomTypes` no longer filters it out of the create-room dropdown.
+  No audit needed; it's a normal, currently-used path now, not dead code to decide about.
 
 ---
 
