@@ -14,6 +14,9 @@ export const DEFAULT_ROOM_PRICE_TIER_ID="standard";
 export const HOST_INACTIVITY_TIMEOUT_SECONDS=600;
 export const ROOM_OWNERSHIP_MONTH_SECONDS=30*24*60*60;
 export const MAX_ROOM_MEMBERS=10;
+// Capped mesh, not an SFU (Decision G / T-103): 4 publishers = 3 peer connections each, which a
+// mid-range Android handset handles. Members 5-10 stay audio/chat-only and just watch the 4 tiles.
+export const MAX_VIDEO_PUBLISHERS=4;
 
 export const ROOM_MODES=[
   {id:"chat",name:"Group chat"},

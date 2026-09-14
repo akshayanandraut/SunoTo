@@ -1,4 +1,4 @@
-import { HOST_INACTIVITY_TIMEOUT_SECONDS, MAX_ROOM_MEMBERS, DEFAULT_ROOM_MODE_ID, validRoomModeId, DRAW_GUESS_CHOOSE_SECONDS, DRAW_GUESS_ROUND_SECONDS, SNAKE_LADDER_TURN_SECONDS, RUMMY_TURN_SECONDS, LUDO_TURN_SECONDS, TEEN_PATTI_TURN_SECONDS, ANDAR_BAHAR_BETTING_SECONDS, DRAGON_TIGER_BETTING_SECONDS, BIDDING_ROUND_SECONDS, TUG_OF_WAR_QUESTION_SECONDS, TUG_OF_WAR_TARGET_SCORE, ELIMINATION_REFLEX_MIN_PLAYERS, ELIMINATION_REFLEX_MAX_PLAYERS, ELIMINATION_REFLEX_ARM_MIN_MS, ELIMINATION_REFLEX_ARM_MAX_MS, ELIMINATION_REFLEX_TAP_WINDOW_SECONDS, PREDICTION_POOL_ROUND_SECONDS, PREDICTION_POOL_DEFAULT_RANGE_MAX, CHARADES_CHOOSE_SECONDS, CHARADES_ROUND_SECONDS, CONNECT_FOUR_TURN_SECONDS, CONNECT_FOUR_ROWS, CONNECT_FOUR_COLS, MAFIA_NIGHT_SECONDS, MAFIA_DAY_DISCUSSION_SECONDS, MAFIA_DAY_VOTE_SECONDS } from "../policies/partyRoomPolicy.js";
+import { HOST_INACTIVITY_TIMEOUT_SECONDS, MAX_ROOM_MEMBERS, MAX_VIDEO_PUBLISHERS, DEFAULT_ROOM_MODE_ID, validRoomModeId, DRAW_GUESS_CHOOSE_SECONDS, DRAW_GUESS_ROUND_SECONDS, SNAKE_LADDER_TURN_SECONDS, RUMMY_TURN_SECONDS, LUDO_TURN_SECONDS, TEEN_PATTI_TURN_SECONDS, ANDAR_BAHAR_BETTING_SECONDS, DRAGON_TIGER_BETTING_SECONDS, BIDDING_ROUND_SECONDS, TUG_OF_WAR_QUESTION_SECONDS, TUG_OF_WAR_TARGET_SCORE, ELIMINATION_REFLEX_MIN_PLAYERS, ELIMINATION_REFLEX_MAX_PLAYERS, ELIMINATION_REFLEX_ARM_MIN_MS, ELIMINATION_REFLEX_ARM_MAX_MS, ELIMINATION_REFLEX_TAP_WINDOW_SECONDS, PREDICTION_POOL_ROUND_SECONDS, PREDICTION_POOL_DEFAULT_RANGE_MAX, CHARADES_CHOOSE_SECONDS, CHARADES_ROUND_SECONDS, CONNECT_FOUR_TURN_SECONDS, CONNECT_FOUR_ROWS, CONNECT_FOUR_COLS, MAFIA_NIGHT_SECONDS, MAFIA_DAY_DISCUSSION_SECONDS, MAFIA_DAY_VOTE_SECONDS } from "../policies/partyRoomPolicy.js";
 import { MAFIA_MIN_PLAYERS, MAFIA_MAX_PLAYERS, MAFIA_ROLES, assignMafiaRoles, resolveMafiaNight, resolveMafiaDayVote, checkMafiaWinner } from "../policies/mafiaEngine.js";
 import { validArenaAvatarState } from "../policies/arenaPolicy.js";
 import { isPremiumAccount as sharedIsPremiumAccount } from "../auth/supabaseUser.js";
@@ -14,6 +14,7 @@ import { SafetyService } from "../services/SafetyService.js";
 import { RadioService } from "../services/RadioService.js";
 import { GamesService } from "../services/GamesService.js";
 import { ConfigService } from "../services/ConfigService.js";
+import { AnalyticsService } from "../services/AnalyticsService.js";
 import { signAnonymousToken } from "../auth/anonymousToken.js";
 
 const RADIO_MEDIA_TOKEN_SECONDS = 900;
@@ -102,7 +103,7 @@ export class PartyRoomShard {
     const storedRoom = await this.state.storage.get("room");
     const isFreshRoom = !storedRoom;
     const room = storedRoom || { hostUserId: isHost ? accountUserId : null, hostLastActiveAt: Date.now(), mode: roomTypeHint === "radio" ? "music" : DEFAULT_ROOM_MODE_ID, seatedParticipantIds: [], coHostAccountIds: [], preauthorizedAccountIds: [], bannedAccountIds: [] };
-    room.seatedParticipantIds ??= []; room.coHostAccountIds ??= []; room.preauthorizedAccountIds ??= []; room.bannedAccountIds ??= [];
+    room.seatedParticipantIds ??= []; room.coHostAccountIds ??= []; room.preauthorizedAccountIds ??= []; room.bannedAccountIds ??= []; room.videoPublisherIds ??= [];
     if (room.closed) {
       return Response.json({ error: "room_closed" }, { status: 403 });
     }
@@ -175,7 +176,7 @@ export class PartyRoomShard {
     const predictionPool = room.mode === "prediction_pool" && room.game ? this.publicPredictionPoolState(room, participantId) : null;
     const charades = room.mode === "charades" && room.game ? { status: room.game.status, performerParticipantId: room.game.performerParticipantId, wordLength: room.game.wordLength, phaseEndsAt: room.game.phaseEndsAt, scores: room.game.scores, roundsPlayed: room.game.roundsPlayed, totalRounds: room.game.totalRounds } : null;
     const mafia = room.mode === "mafia" && room.game ? this.publicMafiaState(room) : null;
-    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia }));
+    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia, videoPublisherIds: room.videoPublisherIds, videoPublisherLimit: MAX_VIDEO_PUBLISHERS }));
     if (room.mode === "mafia" && room.game?.roles?.[participantId] && room.game.alive.includes(participantId)) {
       const role = room.game.roles[participantId];
       const mafiaIds = Object.entries(room.game.roles).filter(([, r]) => r === MAFIA_ROLES.MAFIA).map(([id]) => id);
@@ -1270,6 +1271,30 @@ export class PartyRoomShard {
       await this.state.storage.put("room", room);
       this.broadcastMafiaState(room);
       await this.maybeResolveMafiaVote(room);
+      return;
+    }
+
+    if (type === "VIDEO_START" && attachment.seated) {
+      const room = (await this.state.storage.get("room")) || {};
+      room.videoPublisherIds ??= [];
+      if (room.videoPublisherIds.includes(attachment.participantId)) return;
+      if (room.videoPublisherIds.length >= MAX_VIDEO_PUBLISHERS) {
+        try { await new AnalyticsService(this.env, this.env.FETCHER || fetch).record({ eventId: `party-video-cap-hit:${crypto.randomUUID()}`, eventName: "party_video_publisher_cap_hit", dimension: "total", value: 1 }); } catch {}
+        socket.send(event("MESSAGE_REJECTED", { code: "video_publisher_cap_reached" }));
+        return;
+      }
+      room.videoPublisherIds.push(attachment.participantId);
+      await this.state.storage.put("room", room);
+      try { await new AnalyticsService(this.env, this.env.FETCHER || fetch).record({ eventId: `party-video-start:${crypto.randomUUID()}`, eventName: "party_video_publisher_started", dimension: "total", value: 1 }); } catch {}
+      this.broadcast(event("PARTY_VIDEO_PUBLISHER_JOINED", { participantId: attachment.participantId }));
+      return;
+    }
+
+    if (type === "VIDEO_STOP" && attachment.seated) {
+      const room = (await this.state.storage.get("room")) || {};
+      room.videoPublisherIds = (room.videoPublisherIds || []).filter(id => id !== attachment.participantId);
+      await this.state.storage.put("room", room);
+      this.broadcast(event("PARTY_VIDEO_PUBLISHER_LEFT", { participantId: attachment.participantId }));
       return;
     }
 
@@ -2437,6 +2462,12 @@ export class PartyRoomShard {
     await this.handleTeenPattiDisconnect(attachment.participantId);
     await this.handleConnectFourDisconnect(attachment.participantId);
     await this.handleMafiaDisconnect(attachment.participantId);
+    const roomForVideo = (await this.state.storage.get("room")) || {};
+    if ((roomForVideo.videoPublisherIds || []).includes(attachment.participantId)) {
+      roomForVideo.videoPublisherIds = roomForVideo.videoPublisherIds.filter(id => id !== attachment.participantId);
+      await this.state.storage.put("room", roomForVideo);
+      this.broadcast(event("PARTY_VIDEO_PUBLISHER_LEFT", { participantId: attachment.participantId }));
+    }
     this.broadcast(event("MEMBER_LEFT", { participantId: attachment.participantId }));
   }
 

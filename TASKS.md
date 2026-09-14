@@ -1176,15 +1176,53 @@ file: T-100 → T-095 → T-102 → T-096/T-097 → T-099 → T-103 → T-101 �
   re-run clean — same pre-existing flaky/network-dependent failures as every other task this session, no new
   ones. `node --check` passed on every touched file.
 
-- [ ] **T-103. Group video for Party Rooms: capped mesh at 4 publishers — answers T-064.**
-  Decision G. **T-064 is decided: capped mesh now, SFU later.** 4 publishers = 3 peer connections each, which
-  mid-range Android handsets in India handle, and it reuses the existing 1:1
-  `VIDEO_OFFER`/`VIDEO_ANSWER`/`VIDEO_ICE_CANDIDATE` signaling in `PartyRoomShard.js` with renegotiation on
-  join/leave — zero new infra, zero per-GB cost. Members 5–10 stay audio/chat-only and watch the 4 tiles. T-065
-  (signaling) and T-066 (tile grid UI) proceed on this basis. **Also instrument a counter for how often a room hits
-  the 4-publisher cap** — the documented trigger to build the Cloudflare Realtime/Calls SFU path is >20% of video
-  sessions hitting the cap, and that trigger must be measurable rather than guessed. **T-067 (video Charades) stays
-  deferred** until the SFU exists; text Charades already works and is a better game than a 4-publisher version.
+- [x] **T-103. Group video for Party Rooms: capped mesh at 4 publishers — answers T-064.** — done 2026-09-14
+  Decision G. **T-064 is decided: capped mesh now, SFU later.**
+  **Found a real gap while wiring this up, not a pre-existing design limitation**: `web/js/party-room-client.js`
+  already had genuine N-way mesh plumbing (`videoPeerConnections` keyed per participant, not a single 1:1 pair),
+  and existing members already correctly offered their video to anyone who *joined the room* while that member
+  was already publishing (`MEMBER_JOINED` → `offerVideoToPeer`). What never worked: **turning your camera on
+  after other members were already in the room** — there was no signal telling those already-present members
+  "someone just started publishing," so a room where everyone joined first and then someone turned their camera
+  on later would silently never connect that person's video to anyone. This wasn't a capped-mesh problem, it was
+  a missing "I just started publishing" broadcast — fixed as part of this task since group video needed it to
+  work at all, capped or not.
+  **Server** (`worker/src/durable/PartyRoomShard.js`, new `MAX_VIDEO_PUBLISHERS=4` in `partyRoomPolicy.js`):
+  new `VIDEO_START`/`VIDEO_STOP` messages. `VIDEO_START` checks `room.videoPublisherIds.length` against the cap
+  — under the cap, adds the participant and broadcasts `PARTY_VIDEO_PUBLISHER_JOINED` to everyone (this is what
+  the new publisher's own client uses to know "I'm accepted, now offer my stream to every current member," fixing
+  the gap above); at the cap, rejects with `MESSAGE_REJECTED{code:"video_publisher_cap_reached"}` to the
+  requester only. `VIDEO_STOP` and disconnecting while publishing both free the slot and broadcast
+  `PARTY_VIDEO_PUBLISHER_LEFT`. Publisher list is persisted on `room.videoPublisherIds` (mirrors
+  `seatedParticipantIds`'s existing pattern) since it needs to survive between messages within a session, unlike
+  Arena's `AVATAR_STATE`, which is pure ephemeral relay.
+  **Instrumented the SFU-migration trigger, not just implemented the cap**: every accepted `VIDEO_START` records
+  a `party_video_publisher_started` analytics event, every rejected one records
+  `party_video_publisher_cap_hit` (`supabase/migrations/202609140004_party_video_publisher_analytics.sql` adds
+  both to `record_analytics_event`'s fixed event-name allowlist — discovered this allowlist exists and would have
+  silently rejected the new events with `invalid_analytics_event` if not extended). The documented trigger
+  (">20% of sessions hit the cap") is now `cap_hit / (cap_hit + started)` over these two counters, queryable
+  through the existing analytics tables — not something that has to be guessed at later.
+  **Client** (`web/js/app.js`, `web/js/views.js`): the "Turn on camera & mic" button now sends `VIDEO_START` and,
+  on `PARTY_VIDEO_PUBLISHER_JOINED` for *yourself*, loops over `state.partyMembers` and offers your stream to
+  everyone already in the room (the actual fix for the gap above) — everyone joining *after* you continues to
+  work via the pre-existing `MEMBER_JOINED` path, unchanged. Button disables and relabels "Video full" once
+  `partyVideoPublisherIds.length` reaches the limit; shows a live "N/4 cameras in use" line. `MESSAGE_REJECTED`
+  handling reverts `partyLocalVideoOn` if a race lets two people hit "start" at once and the second is rejected
+  server-side after already having grabbed their camera locally.
+  **Verified**: `test/party-video-publisher-cap.test.js` (5 tests) drives the real `PartyRoomShard` class —
+  accepts up to the cap and broadcasts the join event, rejects the 5th with the right code and confirms the
+  analytics call fires, frees a slot on explicit stop, frees a slot and notifies on disconnect, and doesn't
+  double-count a duplicate `VIDEO_START` from the same participant. Pushed the analytics migration live and
+  called `record_analytics_event` directly: the new event names are now accepted (200), and a made-up event name
+  is still correctly rejected (400 `invalid_analytics_event`), confirming the allowlist extension didn't loosen
+  validation generally. Re-ran the Mafia and Arena test suites after touching this shared file — all still pass
+  unchanged. Full suite re-run clean (346 pass, same pre-existing flaky failures as every other task this
+  session, no new ones).
+  **T-065/T-066 are answered by this** — the signaling extension and the tile grid (`#party-video-grid`) already
+  existed and needed the publisher-cap logic, not a rebuild. **T-067 (video Charades) stays explicitly deferred**
+  until the `>20%` trigger above actually fires and an SFU gets built — text Charades already works and is a
+  better game than a 4-publisher version.
 
 - [ ] **T-104. (BLOCKED — owner action) Fix the Cloudflare Pages "Deploy command".**
   Decision I. The Pages project's Deploy command is a bare `npx wrangler deploy`, which finds no `wrangler.toml`
