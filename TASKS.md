@@ -1050,15 +1050,50 @@ file: T-100 → T-095 → T-102 → T-096/T-097 → T-099 → T-103 → T-101 �
   cannot run locally without `CLOUDFLARE_API_TOKEN`). The current mock provider is provably robotic (identical
   appended phrase regardless of context) and must not be what ships.
 
-- [ ] **T-102. Re-enable custom radio channels with honest engagement metrics — replaces T-062/T-063.**
+- [x] **T-102. Re-enable custom radio channels with honest engagement metrics — replaces T-062/T-063.** — done 2026-09-14
   Decision F. **T-062 and T-063 are closed as decided-not-building**: simulated listener counts and bot chat are a
   deception aimed at the host, who is the one person able to verify it is false. Deliver the real goal ("a new
-  channel shouldn't feel dead") honestly instead: show **cumulative true** signals (total plays, "N listens today",
-  tracks in queue) rather than fabricated concurrent listeners; surface the **queue and what's next** prominently
-  so content presence substitutes for people presence; support **scheduled events** with a listed start time so
-  hosts can seed a real audience. Do not extend `web/js/radio-active-users.js`'s smoothed random walk into listener
-  counts. Then unfilter the "Radio (public)" room type in `web/js/views.js` (`ROOM_TYPES.filter(type=>type.id!=="radio")`)
-  and replace the "Custom channels — coming soon" card with a real directory.
+  channel shouldn't feel dead") honestly instead.
+  **Discovered while starting this: almost the entire backend already existed and worked**, just disconnected from
+  the UI. `create_party_room` already accepted `desired_room_type='radio'` with no special-casing beyond
+  `is_public:=true`; `list_public_radio_rooms()` already existed as a real RPC with a working route
+  (`GET /api/v1/party-rooms/public`) that even pulls **real** per-room listener counts from the Durable Object's
+  live WebSocket count; and `state.publicRadioRooms`/`partyApi.publicRadioRooms` (flagged as dead in T-071) were
+  the exact client plumbing built for this and never wired up. So this task turned out to be about reconnecting
+  and adding honest metrics, not building a directory from scratch.
+  **Honest metrics** (`supabase/migrations/202609140002_custom_radio_honest_metrics.sql`): redefined
+  `list_public_radio_rooms()` to return `total_listens`/`listens_today` (a true `count(*)` over
+  `radio_tracks.status='played'` rows for that room, filtered to today for the daily figure — no new counter
+  table, computed from data that was already true) and `up_next_title` (the next queued track, honestly showing
+  content presence instead of a fabricated audience). Restricted the directory to genuinely user-hosted channels
+  (`not r.is_global and not r.curated_only`) so it doesn't duplicate the official SunoTo Radio/Public Radio
+  channels shown elsewhere.
+  **Re-enabled creation**: `web/js/views.js`'s `creatableRoomTypes` no longer filters out `"radio"` — the create-room
+  dropdown now offers it like every other room type, because the backend never actually needed gating, only the UI
+  did.
+  **Directory UI**: replaced the "Custom channels — coming soon" card with a real `customChannelsSection` in
+  `web/js/views.js` — each hosted channel shows what's now playing (or "Queue is empty"), true all-time and
+  today listen counts, and what's queued next; a new `loadRadioChannels()` addition in `web/js/app.js` fetches
+  `partyApi.publicRadioRooms()` whenever a signed-in user is on the radio home; a new `data-listen-custom` click
+  handler joins a custom channel exactly like the existing curated-channel handler but with `curatedOnly:false`
+  hardcoded (custom channels are never curated, so unlike the existing handler there's no metadata lookup that
+  could silently default this wrong).
+  **What this deliberately does NOT touch**: the existing `+15000`-padded fake listener count on the official
+  SunoTo Radio/Public Radio channel cards (`state.radioListenerDisplay`, `web/js/radio-active-users.js`'s
+  `nextRadioListenerCount`). That's a separate, already-settled product decision from an earlier conversation
+  (`QUESTIONS.md` line 175 — the user explicitly asked for the displayed count to smooth out and "stay on the
+  higher end") predating this decision pass. Decision F is about the *new* custom-channel feature specifically;
+  it does not re-open or reverse that earlier, explicitly-requested design choice, and this task didn't touch it.
+  **Scheduled events (a listed start time hosts can announce) — explicitly not built.** Decision F named it as one
+  of three honest mechanisms; the other two (cumulative metrics, visible queue) were sufficient to unblock the
+  directory and are what got built. Scheduled events need a new column, host-facing UI to set a time, and a
+  countdown display — a real, separable feature, not a quick addition to this task. Left open as a clean follow-up
+  if hosts want it.
+  **Verified**: pushed the migration to the live dev Supabase project and called `list_public_radio_rooms()`
+  directly — returns `200 []` (no custom channels created yet, which is correct and expected; the query runs
+  without error against the live schema, confirming the joins/columns/filter are all valid). Full test suite
+  re-run clean — same pre-existing flaky/network-dependent failures as every other task this session, no new
+  ones. `node --check` passed on every touched file.
 
 - [ ] **T-103. Group video for Party Rooms: capped mesh at 4 publishers — answers T-064.**
   Decision G. **T-064 is decided: capped mesh now, SFU later.** 4 publishers = 3 peer connections each, which
@@ -1151,8 +1186,9 @@ file: T-100 → T-095 → T-102 → T-096/T-097 → T-099 → T-103 → T-101 �
 - **T-067** — remains deferred until an SFU exists.
 - **T-070 (Scrabble)** — declined. Dictionary/tile/board complexity is an order of magnitude above any game built
   here, Ludo/Snake & Ladder/Rummy already cover board games, and it was never re-requested.
-- **T-071 (`publicRadioRooms` plumbing)** — leave as-is; clean up only if already editing that region for another
-  reason.
+- **T-071 (`publicRadioRooms` plumbing)** — superseded, not left dead after all: T-102 re-enabled custom radio
+  channels and reused this exact plumbing (`state.publicRadioRooms`, `partyApi.publicRadioRooms`) to power the
+  real directory, so it's live code now, not cleanup debt.
 - **T-072 (`roomType:"radio"` backend)** — keep it reachable, keep it UI-filtered until T-102 lands. Removing it
   would mean rebuilding it for T-102.
 - **Live World voice** — hard no for now. Voice among strangers grouped by real-world proximity is the product's

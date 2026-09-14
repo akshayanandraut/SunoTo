@@ -497,7 +497,7 @@ const flagsBlocked=await requireFlags(env,["live_world_enabled"]);if(flagsBlocke
       if(!response.ok)return Response.json({error:"public_rooms_failed"},{status:400});
       const rows=await response.json();
       const listenerCounts=await Promise.all(rows.map(row=>shard(env,"PARTY_ROOM",row.public_id).fetch("https://party-room.internal/listeners").then(r=>r.json()).then(d=>d.count||0).catch(()=>0)));
-      return Response.json({rooms:rows.map((row,index)=>({publicId:row.public_id,name:row.name,joinCode:row.join_code,roomType:row.room_type,nowPlaying:row.now_playing_title?{title:row.now_playing_title,artistName:row.now_playing_artist}:null,realListeners:listenerCounts[index],artistSpotifyUrl:row.artist_spotify_url,artistAppleMusicUrl:row.artist_apple_music_url,curatedOnly:row.curated_only}))});
+      return Response.json({rooms:rows.map((row,index)=>({publicId:row.public_id,name:row.name,joinCode:row.join_code,roomType:row.room_type,nowPlaying:row.now_playing_title?{title:row.now_playing_title,artistName:row.now_playing_artist}:null,realListeners:listenerCounts[index],totalListens:Number(row.total_listens)||0,listensToday:Number(row.listens_today)||0,upNextTitle:row.up_next_title||null,curatedOnly:false}))});
     }
     if(request.method==="POST"&&url.pathname==="/api/v1/party-rooms/join"){
       const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});
