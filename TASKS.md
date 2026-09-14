@@ -1037,12 +1037,51 @@ file: T-100 → T-095 → T-102 → T-096/T-097 → T-099 → T-103 → T-101 �
   looks smooth; (3) **binary delta encoding** instead of per-tick JSON. Log the design with measured numbers before
   writing code. Do not attempt this as an incremental tweak to the 24-player relay.
 
-- [ ] **T-099. Arena: Red Light / Green Light, with 5-minute scheduled round starts.**
-  Decision C3. The cheapest possible real game on top of what exists: the server needs only a phase timer
-  (green/red) and a "did this player's position change during a red phase" check against the movement stream
-  already being relayed — no new physics. Round start every 5 minutes is part of this task, not a separate lobby
-  feature. **Cart racing is explicitly deferred** — vehicle physics, a track, and collision resolution are a
-  different engine, not a game mode. Build this one, see whether anyone plays it, then decide about more.
+- [x] **T-099. Arena: Red Light / Green Light, with 5-minute scheduled round starts.** — done 2026-09-14
+  Decision C3. Built exactly as scoped: no new physics, just a phase timer and a movement check against the
+  `AVATAR_STATE` stream `ArenaLobbyShard` (T-096) already relays.
+  **Pure engine** (`worker/src/policies/redLightGreenLightEngine.js`) — `movedDuringRedPhase(start, current)` checks
+  only ground-plane translation (`x`/`z`) against a small tolerance, deliberately ignoring `yaw` (looking around
+  during red is allowed, matching the real game) and giving a pass to anyone with no recorded starting position
+  (a spectator who joined mid-round was never "in" the round to begin with). `randomPhaseSeconds(min,max,random)`
+  picks green (3–7s) and red (2–4s) phase lengths with an injectable random source for deterministic tests.
+  **Wired into `ArenaLobbyShard.js`**, driven by the Durable Object's own `alarm()` (the same mechanism
+  `PartyRoomShard` already uses for every other timed game — nothing new here): every 5 minutes
+  (`RLGG_ROUND_INTERVAL_SECONDS`), if 2+ people are connected, everyone currently in the lobby is auto-entered
+  into a round (`alive` snapshot taken from live connected sockets — no opt-in, matching "whoever is in the lobby"
+  from the original ask); fewer than 2 connected and the round is silently skipped and rescheduled. Position
+  tracking (`this.lastPosition`, updated on every `AVATAR_STATE`) is kept **in memory on the DO instance, not
+  Durable Object storage** — persisting it would mean a storage write on every single 10Hz tick from every
+  player for data that's fully reconstructible from traffic and only needed for an instant at the moment a red
+  phase begins. Only the actual round state (`status`/`alive`/`eliminated`/phase timestamps) is persisted, and
+  only on the transitions that change it (round start, phase flip, elimination, round end) — not on every tick.
+  **Elimination**: caught moving during red → removed from `alive`, added to `eliminated`, `RLGG_ELIMINATED`
+  broadcast, and their final "caught" position is relayed once more so everyone sees exactly where they got
+  caught. From that point until the round ends, their `AVATAR_STATE` updates are still accepted (so they can
+  keep moving locally / spectating) but **not relayed to anyone else** — they visually freeze in place for the
+  rest of the room, matching the genre. Disconnecting while alive mid-round is treated the same as being caught,
+  so the round can still correctly end on "only one left" instead of hanging forever waiting for someone who's gone.
+  Round ends (time budget expires or ≤1 alive) → `RLGG_ROUND_OVER` with the survivor list, state resets to
+  `"waiting"`, next round scheduled 5 minutes out.
+  **Client**: `web/js/app.js`'s `handleArenaLobbyEvent` tracks `state.arenaRlgg` across
+  `READY`/`RLGG_ROUND_START`/`RLGG_PHASE_CHANGED`/`RLGG_ELIMINATED`/`RLGG_ROUND_OVER`, narrates eliminations and
+  round outcomes into the same lobby chat log built for T-096 (reused, not a second log), and `web/js/views.js`'s
+  `arenaView` shows a live 🔴/🟢 phase banner plus an "eliminated, but can keep watching" note for the local
+  player.
+  **Verified**: `test/red-light-green-light-engine.test.js` (7 tests) covers phase-timing bounds/determinism and
+  every movement-detection edge case (no movement, sampling noise tolerance, real translation, no-start-position,
+  yaw-only rotation). `test/arena-red-light-green-light.test.js` (8 tests) drives the real `ArenaLobbyShard`
+  class through `alarm()`/`webSocketMessage()`/`webSocketClose()` directly: skips starting with <2 players,
+  starts a round and snapshots who's alive, eliminates a real mover and relays their final position exactly once,
+  does *not* eliminate someone who stays still, freezes an eliminated player's relay for the rest of the round,
+  ends the round on last-survivor, treats a disconnect the same as a catch, and walks a full
+  green→red→green→(time expires)→waiting cycle through repeated `alarm()` calls. Two of those tests initially
+  failed for a real reason worth recording: the test env's mocked flags object used raw `DEFAULT_FLAGS`, which
+  has `arena_enabled: false` by default (T-100's `DEFAULT_DISABLED` set) — the *test fixture* was silently
+  gating out all the logic under test, not the implementation; fixed by explicitly overriding `arena_enabled:true`
+  in the mock, matching every other arena test file's convention. Full suite re-run clean after the fix (341
+  pass, same pre-existing flaky failures as every other task this session, no new ones). **Cart racing remains
+  explicitly deferred**, per the decision — not attempted.
 
 - [x] **T-100. Add `arena_enabled` and `live_world_enabled` feature flags (default OFF) and enforce them.** — done 2026-09-14
   Decision D, and a real gap: `FLAG_KEYS` in `worker/src/policies/flagPolicy.js` had neither, so Arena and Live

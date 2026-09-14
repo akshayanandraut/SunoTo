@@ -19,7 +19,16 @@ function makeEnv({ arenaEnabled = true, isPremium = true, maxPlayers = 24 } = {}
 
 function makeState(existingSockets = []) {
   const sockets = existingSockets.slice();
-  return { getWebSockets: () => sockets, _sockets: sockets };
+  const storageMap = new Map();
+  return {
+    getWebSockets: () => sockets,
+    _sockets: sockets,
+    storage: {
+      get: async key => storageMap.get(key),
+      put: async (key, value) => { storageMap.set(key, value); },
+      setAlarm: async () => {}
+    }
+  };
 }
 
 function makeExistingSocket(participantId) {
