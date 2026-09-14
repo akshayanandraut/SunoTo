@@ -1,5 +1,7 @@
 import { HOST_INACTIVITY_TIMEOUT_SECONDS, MAX_ROOM_MEMBERS, DEFAULT_ROOM_MODE_ID, validRoomModeId, DRAW_GUESS_CHOOSE_SECONDS, DRAW_GUESS_ROUND_SECONDS, SNAKE_LADDER_TURN_SECONDS, RUMMY_TURN_SECONDS, LUDO_TURN_SECONDS, TEEN_PATTI_TURN_SECONDS, ANDAR_BAHAR_BETTING_SECONDS, DRAGON_TIGER_BETTING_SECONDS, BIDDING_ROUND_SECONDS, TUG_OF_WAR_QUESTION_SECONDS, TUG_OF_WAR_TARGET_SCORE, ELIMINATION_REFLEX_MIN_PLAYERS, ELIMINATION_REFLEX_MAX_PLAYERS, ELIMINATION_REFLEX_ARM_MIN_MS, ELIMINATION_REFLEX_ARM_MAX_MS, ELIMINATION_REFLEX_TAP_WINDOW_SECONDS, PREDICTION_POOL_ROUND_SECONDS, PREDICTION_POOL_DEFAULT_RANGE_MAX, CHARADES_CHOOSE_SECONDS, CHARADES_ROUND_SECONDS, CONNECT_FOUR_TURN_SECONDS, CONNECT_FOUR_ROWS, CONNECT_FOUR_COLS, MAFIA_NIGHT_SECONDS, MAFIA_DAY_DISCUSSION_SECONDS, MAFIA_DAY_VOTE_SECONDS } from "../policies/partyRoomPolicy.js";
 import { MAFIA_MIN_PLAYERS, MAFIA_MAX_PLAYERS, MAFIA_ROLES, assignMafiaRoles, resolveMafiaNight, resolveMafiaDayVote, checkMafiaWinner } from "../policies/mafiaEngine.js";
+import { validArenaAvatarState } from "../policies/arenaPolicy.js";
+import { isPremiumAccount as sharedIsPremiumAccount } from "../auth/supabaseUser.js";
 import { randomTugOfWarQuestion, TUG_OF_WAR_QUESTIONS as TUG_OF_WAR_QUESTIONS_REF } from "../policies/tugOfWarQuestions.js";
 import { DRAW_GUESS_WORDS } from "../policies/drawGuessWords.js";
 import { SNAKE_LADDER_TILES, SNAKE_LADDER_MIN_PLAYERS, SNAKE_LADDER_MAX_PLAYERS, SNAKE_LADDER_BOARD_SIZE } from "../policies/snakeLadderBoard.js";
@@ -212,12 +214,7 @@ export class PartyRoomShard {
   }
 
   async isPremiumAccount(accountUserId) {
-    if (!accountUserId) return false;
-    try {
-      const response = await (this.env.FETCHER || fetch)(`${this.env.SUPABASE_URL}/rest/v1/profiles?select=is_premium&user_id=eq.${encodeURIComponent(accountUserId)}&limit=1`, { headers: { apikey: this.env.SUPABASE_SERVICE_ROLE_KEY, authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}` } });
-      const [row] = await response.json().catch(() => []);
-      return Boolean(row?.is_premium);
-    } catch { return false; }
+    return sharedIsPremiumAccount(this.env, accountUserId, this.env.FETCHER || fetch);
   }
 
   async webSocketMessage(socket, raw) {
@@ -254,10 +251,9 @@ export class PartyRoomShard {
       let flags;
       try { flags = (await new ConfigService(this.env, this.env.FETCHER || fetch).flags()).config; } catch { flags = null; }
       if (!flags?.arena_enabled) return;
-      const ARENA_HALF = 260, x = Number(payload.x), y = Number(payload.y), z = Number(payload.z), yaw = Number(payload.yaw);
-      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z) || !Number.isFinite(yaw) || Math.abs(x) > ARENA_HALF || Math.abs(z) > ARENA_HALF || y < -1 || y > 50) return;
-      const action = ["idle", "walk", "sprint", "crouch", "prone"].includes(payload.action) ? payload.action : "idle";
-      this.broadcast(event("AVATAR_STATE", { participantId: attachment.participantId, x, y, z, yaw, action }), socket);
+      const validated = validArenaAvatarState(payload);
+      if (!validated) return;
+      this.broadcast(event("AVATAR_STATE", { participantId: attachment.participantId, ...validated }), socket);
       return;
     }
     if (type === "HOST_HEARTBEAT" && attachment.isHost) {

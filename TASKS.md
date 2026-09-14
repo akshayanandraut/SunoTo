@@ -973,20 +973,62 @@ file: T-100 → T-095 → T-102 → T-096/T-097 → T-099 → T-103 → T-101 �
   fine below a few thousand listeners and an importer is pure ongoing maintenance for a
   problem we do not have.
 
-- [ ] **T-096. Arena: strangers auto-join lobby (the actual "total strangers" experience).**
-  Decision C1. Today Arena only works inside a party room you already joined with someone, which does not deliver
-  the stated vision. Add a single named auto-join lobby per region: "Enter Arena" claims a slot in a new
-  `ArenaLobbyShard` Durable Object. **Reuse, do not reinvent** — follow the `MatchmakingShard`/`PartyRoomShard`
-  structure, and copy the self-registering claim pattern Live World already proved (`claimDirect()` /
-  `/liveworld/claim`). The `AVATAR_STATE` relay, bounds validation, and action whitelist already built in
-  `PartyRoomShard.js` should move to (or be shared with) the new shard rather than being duplicated.
-
-- [ ] **T-097. Arena: enforce a configurable per-lobby capacity, ship 24.**
-  Decision C2. At the current 10 Hz full broadcast, 24 players is already ~5.5k msg/sec through one DO
-  (24×23×10); 100 players naively is ~99k msg/sec and will not work. Ship a cap of **24**, stored in `app_config`
-  (new `arena` key, or extend the existing pricing/flags pattern — follow `ConfigService.js`'s established
-  cache-and-normalize shape and add an admin panel field) so it is tunable without a deploy. Reject joins over
-  capacity with a clear client-side message.
+- [x] **T-096 + T-097. Arena: strangers auto-join lobby with a configurable, capped capacity.** — done 2026-09-14
+  Decision C1/C2. Built together since the capacity cap only makes sense once there's a real lobby to cap.
+  **Why not Live World's `claimDirect()` pattern**: that mechanism exists to bridge two independently-authenticated
+  identities into a *shared* `ChatSession` DO neither of them owns — it solves "how do both sides get authorized
+  onto the same existing session." Arena's lobby isn't a paired 1:1 session at all; it's an open many-to-many
+  broadcast room, which is exactly what `PartyRoomShard`'s WebSocket-upgrade-with-inline-auth pattern already is.
+  Modeled the new shard on that instead — copying Live World's claim trick here would have solved a problem Arena
+  doesn't have.
+  **New Durable Object** (`worker/src/durable/ArenaLobbyShard.js`, bound as `ARENA_LOBBY` in `wrangler.toml`,
+  migration tag `v9`): a single global auto-join lobby (naming lobbies per-region instead of `"global"` is the
+  natural next step once traffic justifies it — not attempted here). On connect: checks `arena_enabled`, checks
+  premium, closes any stale socket for the same `participantId` (so a page refresh doesn't permanently eat a
+  capacity slot), then checks the live socket count against the configured cap before accepting. Relays
+  `AVATAR_STATE` and a new `ARENA_MESSAGE` open-chat relay (see below) to everyone else; broadcasts
+  `MEMBER_JOINED`/`MEMBER_LEFT`.
+  **Shared, not duplicated** (the literal instruction in the original task): extracted the bounds/action-whitelist
+  validation from `PartyRoomShard`'s inline `AVATAR_STATE` handler into `worker/src/policies/arenaPolicy.js`'s
+  `validArenaAvatarState()`, used by both `PartyRoomShard.js` (in-room arena mode, from T-100) and the new
+  `ArenaLobbyShard.js` — one bounds check, not two that can drift. Did the same for the premium lookup: moved
+  `PartyRoomShard.isPremiumAccount()`'s body into a shared `isPremiumAccount(env, accountUserId)` in
+  `worker/src/auth/supabaseUser.js`, with `PartyRoomShard`'s instance method now just delegating to it.
+  **Capacity config** (`supabase/migrations/202609140003_arena_config.sql`): a new `app_config.arena` key
+  (`{maxPlayers:24}`) with the same versioned/audited `update_arena_config` RPC pattern as pricing/flags, wired
+  into `ConfigService.arena()`/`updateArena()` and a new `/api/v1/admin/arena` GET/PUT route. **The JS
+  `normalizeArenaConfig()` hard-rejects any value above 24** — not just defaults to 24, actually throws — so an
+  admin can't accidentally type in "100" and get the exact traffic explosion T-098 exists to prevent (24 players
+  at 10 Hz full-broadcast is already ~5.5k msg/sec through one DO; 100 naively would be ~99k msg/sec). Added an
+  admin panel field (`web/js/admin.js`) explaining exactly that constraint in its copy, not just presenting a bare
+  number input.
+  **Open chat, not just movement**: the original ask was "everyone can talk to each other while moving around" —
+  added a minimal `ARENA_MESSAGE` relay (open to everyone in the lobby, no seating/moderation concept, matching
+  the lobby's minimal scope) and a real client-side chat log + input in the standalone Arena view
+  (`web/js/views.js`'s `arenaView`, `web/js/app.js`'s `arenaLobbyLog`/`restoreArenaLobbyLog`), rather than leaving
+  the server-side relay built with no way to use it.
+  **Client**: new `web/js/arena-lobby-client.js` (`ArenaLobbyClient`, modeled on `PartyRoomClient` but much
+  smaller — no WebRTC, no seating). The standalone `/arena` route (`web/js/app.js`'s `mountArena`) now takes a
+  `mode` (`"practice"` | `"lobby"` | `"party"`) instead of a boolean: `"lobby"` connects the new client for real
+  networked strangers play, `"party"` is the existing in-party-room path from T-093/T-100, unchanged. Browsers
+  can't read the HTTP status of a rejected WebSocket upgrade (no way to distinguish "lobby full" from "flag off"
+  from the client), so `ArenaLobbyClient` gives up and surfaces a generic "try again shortly" message after 3
+  consecutive failed handshake attempts instead of retrying forever — the same practical limitation
+  `PartyRoomClient`'s existing `room_full` rejection already has, not a new gap introduced here.
+  **Verified**: `test/arena-lobby.test.js` (9 tests) exercises the real `ArenaLobbyShard` class directly — flag-off
+  rejection, non-premium rejection, malformed participant id, capacity-exceeded rejection, stale-socket-on-reconnect
+  not eating a capacity slot, `AVATAR_STATE` relay + out-of-bounds rejection, mid-session flag-flip stopping the
+  relay, `ARENA_MESSAGE` relay + length limits, and `MEMBER_LEFT` on close. `test/arena-config.test.js` (10 tests)
+  covers `normalizeArenaConfig` (including the >24 rejection), the shared `validArenaAvatarState`, and the
+  versioned config service/RPC shape. Re-ran `test/arena-live-world-flags.test.js` and `test/mafia-party-room.test.js`
+  after the `PartyRoomShard` refactor (shared bounds validator, shared premium helper) — all still pass unchanged,
+  confirming the extraction didn't alter behavior. Pushed the migration live and confirmed against the real dev
+  Supabase project: `app_config.arena` exists with `{"maxPlayers":24}`; hit the live `/api/v1/arena/socket` route
+  via `wrangler dev` and confirmed it returns `426` with no Upgrade header, `503 feature_disabled:arena_enabled`
+  with the flag off (the real default), and `401 invalid_anonymous_session` once the flag was temporarily flipped
+  on — confirming the gate order is flag → auth, matching every other flag-gated route in this codebase. Reverted
+  the flag back to `false` afterward. Full test suite re-run clean (328 pass, same pre-existing flaky failures as
+  every other task this session).
 
 - [ ] **T-098. (Design only, do not build yet) Arena at 100 players.**
   Decision C2. Only after T-096/T-097 are live and there is real player volume. Three things are required and must
