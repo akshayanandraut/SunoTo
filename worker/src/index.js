@@ -75,6 +75,12 @@ async function recordAnalytics(env,event){if(!env?.SUPABASE_URL||!env?.SUPABASE_
 export function allowedOrigin(request,env){const origin=request.headers.get("origin");if(!origin)return null;const configured=String(env.ALLOWED_ORIGINS||env.ALLOWED_ORIGIN||"").split(",").map(value=>value.trim()).filter(Boolean),sameOrigin=new URL(request.url).origin;return new Set([...configured,sameOrigin]).has(origin)?origin:false;}
 export function secureResponse(response,request,env){if(response.status===101)return response;const headers=new Headers(response.headers),origin=allowedOrigin(request,env);headers.set("x-content-type-options","nosniff");headers.set("referrer-policy","no-referrer");headers.set("permissions-policy","camera=(), microphone=(), geolocation=()");headers.set("cross-origin-opener-policy","same-origin");headers.set("cross-origin-resource-policy","same-site");headers.set("strict-transport-security","max-age=31536000; includeSubDomains");headers.set("x-frame-options","DENY");headers.set("vary","Origin");headers.set("cache-control",request.method==="GET"&&["/api/v1/config/public","/api/v1/stats/public","/api/v1/compliance/public"].includes(new URL(request.url).pathname)?"public, max-age=30":"no-store");if(origin){headers.set("access-control-allow-origin",origin);headers.set("access-control-allow-credentials","true");}return new Response(response.body,{status:response.status,statusText:response.statusText,headers});}
 
+// R2 is optional: the Worker deploys and runs fine without it, only the media-upload features
+// (avatars, radio track audio/artwork) are unavailable. Cloudflare refuses to deploy a Worker whose
+// config binds an R2 bucket before R2 is enabled on the account, so the binding is not declared in
+// wrangler.toml by default -- see the R2 section there for how to turn media uploads on.
+export function requireMediaStorage(env){return env.RADIO_BUCKET?null:Response.json({error:"media_storage_unavailable"},{status:503});}
+
 let isolateStartedAt = null;
 async function timedCheck(fn) {
   const startedAt = Date.now();
@@ -230,6 +236,7 @@ async function handleRequest(request, env) {
       const form=await request.formData();
       const avatarFile=form.get("avatar");
       if(!(avatarFile instanceof File)||avatarFile.size<100||avatarFile.size>5*1024*1024)return Response.json({error:"invalid_avatar_file"},{status:400});
+      const storageBlocked=requireMediaStorage(env);if(storageBlocked)return storageBlocked;
       const avatarBytes=new Uint8Array(await avatarFile.arrayBuffer());
       const avatarExt=looksLikeImage(avatarBytes);
       if(!avatarExt)return Response.json({error:"invalid_avatar_file"},{status:400});
@@ -537,6 +544,7 @@ const flagsBlocked=await requireFlags(env,["live_world_enabled"]);if(flagsBlocke
     }
     if(request.method==="POST"&&url.pathname==="/api/v1/admin/radio/tracks"){
       const authorization=await adminUser(request,env);if(authorization.error)return authorization.error;
+      const storageBlocked=requireMediaStorage(env);if(storageBlocked)return storageBlocked;
       const contentType=request.headers.get("content-type")||"";if(!contentType.includes("multipart/form-data"))return Response.json({error:"invalid_upload"},{status:400});
       const form=await request.formData();
       const roomPublicId=String(form.get("roomPublicId")||"");
@@ -585,6 +593,7 @@ const flagsBlocked=await requireFlags(env,["live_world_enabled"]);if(flagsBlocke
     }
     if(request.method==="POST"&&radioQueueMatch){
       const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});if(!user.emailVerified)return Response.json({error:"email_verification_required"},{status:403});
+      const storageBlocked=requireMediaStorage(env);if(storageBlocked)return storageBlocked;
       const contentType=request.headers.get("content-type")||"";if(!contentType.includes("multipart/form-data"))return Response.json({error:"invalid_upload"},{status:400});
       const form=await request.formData();
       const rightsAttested=form.get("rightsAttested")==="true";
@@ -617,6 +626,7 @@ const flagsBlocked=await requireFlags(env,["live_world_enabled"]);if(flagsBlocke
     }
     const radioMediaMatch=url.pathname.match(/^\/api\/v1\/radio-media\/((?:radio\/[0-9a-fA-F-]{36}|avatars\/[0-9a-fA-F-]{36})\/[a-zA-Z0-9-]+\.[a-z0-9]{2,5})$/);
     if(request.method==="GET"&&radioMediaMatch){
+      const storageBlocked=requireMediaStorage(env);if(storageBlocked)return storageBlocked;
       const key=radioMediaMatch[1];
       if(key.startsWith("radio/")&&env.ANON_SESSION_SECRET){
         const claims=await verifyAnonymousToken(url.searchParams.get("t"),env.ANON_SESSION_SECRET);

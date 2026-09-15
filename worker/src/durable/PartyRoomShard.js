@@ -2527,7 +2527,7 @@ export class PartyRoomShard {
     const previous = room.currentTrack;
     if (previous) {
       try { await this.radioService().completeTrack(previous.id); } catch {}
-      if (!room.curatedOnly) {
+      if (!room.curatedOnly && this.env.RADIO_BUCKET) {
         try { await this.env.RADIO_BUCKET.delete(previous.storageKey); } catch {}
         if (previous.artworkKey) try { await this.env.RADIO_BUCKET.delete(previous.artworkKey); } catch {}
       }

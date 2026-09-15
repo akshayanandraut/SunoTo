@@ -1,4 +1,4 @@
-name = "random-chat-india-api"
+name = "sunoto"
 main = "src/index.js"
 compatibility_date = "2026-08-01"
 
@@ -45,9 +45,20 @@ class_name = "ForumRoomShard"
 name = "ARENA_LOBBY"
 class_name = "ArenaLobbyShard"
 
-[[r2_buckets]]
-binding = "RADIO_BUCKET"
-bucket_name = "sunoto-radio"
+# R2 (media storage for avatars + radio track audio/artwork) is intentionally NOT bound by default.
+# Cloudflare refuses to deploy a Worker whose config references an R2 bucket before R2 is enabled on
+# the account ("Please enable R2 through the Cloudflare Dashboard", API error 10042), which blocks the
+# entire deploy over an optional feature. The Worker handles a missing RADIO_BUCKET gracefully:
+# requireMediaStorage() in src/index.js returns 503 media_storage_unavailable from the upload/serve
+# routes, everything else works normally.
+#
+# To turn media uploads on: enable R2 in the Cloudflare dashboard, create the bucket
+# (`npx wrangler r2 bucket create sunoto-radio`), then uncomment the block below (and the matching
+# [[env.dev.r2_buckets]] block further down for local dev).
+#
+# [[r2_buckets]]
+# binding = "RADIO_BUCKET"
+# bucket_name = "sunoto-radio"
 
 [ai]
 binding = "AI"
@@ -131,9 +142,10 @@ class_name = "ForumRoomShard"
 name = "ARENA_LOBBY"
 class_name = "ArenaLobbyShard"
 
-[[env.dev.r2_buckets]]
-binding = "RADIO_BUCKET"
-bucket_name = "sunoto-radio-dev"
+# See the R2 note above -- uncomment alongside the top-level [[r2_buckets]] block.
+# [[env.dev.r2_buckets]]
+# binding = "RADIO_BUCKET"
+# bucket_name = "sunoto-radio-dev"
 
 # Deliberately NOT bound under [env.dev]: wrangler dev requires the AI binding to establish a
 # remote proxy connection to Cloudflare (Workers AI cannot be emulated locally at all), which in
