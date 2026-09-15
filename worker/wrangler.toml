@@ -2,6 +2,17 @@ name = "sunoto"
 main = "src/index.js"
 compatibility_date = "2026-08-01"
 
+# Serve the built frontend (dist/, produced by `npm run build`) from this same Worker, so the site
+# and its API share one origin and one deployment. run_worker_first routes only /api/* to the Worker
+# code; every other path is served as a static file. Same-origin also means the browser never makes a
+# cross-origin API call, so ALLOWED_ORIGINS stops being load-bearing for the first-party frontend.
+# not_found_handling is "404-page" (not SPA rewriting) because this app uses hash routing -- real
+# paths always map to a real built file (/, /admin.html, /privacy.html, ...).
+[assets]
+directory = "../dist"
+not_found_handling = "404-page"
+run_worker_first = ["/api/*"]
+
 [triggers]
 crons = ["*/10 * * * *"]
 

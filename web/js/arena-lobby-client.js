@@ -1,8 +1,7 @@
-const base=import.meta.env?.VITE_API_BASE_URL||"http://127.0.0.1:8787/api/v1";
+import { websocketUrl } from "./api-base.js";
 
 function arenaSocketUrl({accountToken}={}){
-  const url=new URL(`${base}/arena/socket`);
-  url.protocol=url.protocol==="https:"?"wss:":"ws:";
+  const url=websocketUrl("/arena/socket");
   if(accountToken)url.searchParams.set("accountToken",accountToken);
   return url.toString();
 }

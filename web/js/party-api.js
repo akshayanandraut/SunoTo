@@ -1,4 +1,5 @@
-const base=import.meta.env?.VITE_API_BASE_URL||"http://127.0.0.1:8787/api/v1";
+import { API_BASE, websocketUrl } from "./api-base.js";
+const base=API_BASE;
 async function call(path,session,options={}){const authHeader=session?.access_token?{authorization:`Bearer ${session.access_token}`}:{};const response=await fetch(`${base}${path}`,{...options,headers:{"content-type":"application/json",...authHeader,...options.headers}});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"party_room_request_failed");return data;}
 export const partyApi={
   create:(session,{roomType,priceTier,name,months})=>call("/party-rooms",session,{method:"POST",body:JSON.stringify({roomType,priceTier,name,months})}),
@@ -23,8 +24,7 @@ export const partyApi={
   },
 };
 export function partySocketUrl(publicId,{accountToken,isHost,participantId,roomType}={}){
-  const url=new URL(`${base}/party-rooms/${publicId}/socket`);
-  url.protocol=url.protocol==="https:"?"wss:":"ws:";
+  const url=websocketUrl(`/party-rooms/${publicId}/socket`,base);
   url.searchParams.set("participantId",participantId);
   if(accountToken)url.searchParams.set("accountToken",accountToken);
   if(isHost)url.searchParams.set("isHost","1");

@@ -1,5 +1,5 @@
 import { adDecision } from "../../worker/src/policies/adPolicy.js";
-const base=import.meta.env?.VITE_API_BASE_URL||"http://127.0.0.1:8787/api/v1";
+const base=import.meta.env?.VITE_API_BASE_URL||"/api/v1";
 
 class HouseAdProvider{
   mount(slot){const card=document.createElement("div");card.className="ad-card";card.setAttribute("aria-label","Advertisement");const label=document.createElement("span");label.textContent="Advertisement";const message=document.createElement("strong");message.textContent="Your ad could be here";card.append(label,message);slot.replaceChildren(card);}
