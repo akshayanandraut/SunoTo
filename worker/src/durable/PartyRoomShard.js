@@ -1,4 +1,4 @@
-import { HOST_INACTIVITY_TIMEOUT_SECONDS, MAX_ROOM_MEMBERS, MAX_VIDEO_PUBLISHERS, DEFAULT_ROOM_MODE_ID, validRoomModeId, DRAW_GUESS_CHOOSE_SECONDS, DRAW_GUESS_ROUND_SECONDS, SNAKE_LADDER_TURN_SECONDS, RUMMY_TURN_SECONDS, LUDO_TURN_SECONDS, TEEN_PATTI_TURN_SECONDS, ANDAR_BAHAR_BETTING_SECONDS, DRAGON_TIGER_BETTING_SECONDS, BIDDING_ROUND_SECONDS, TUG_OF_WAR_QUESTION_SECONDS, TUG_OF_WAR_TARGET_SCORE, ELIMINATION_REFLEX_MIN_PLAYERS, ELIMINATION_REFLEX_MAX_PLAYERS, ELIMINATION_REFLEX_ARM_MIN_MS, ELIMINATION_REFLEX_ARM_MAX_MS, ELIMINATION_REFLEX_TAP_WINDOW_SECONDS, PREDICTION_POOL_ROUND_SECONDS, PREDICTION_POOL_DEFAULT_RANGE_MAX, CHARADES_CHOOSE_SECONDS, CHARADES_ROUND_SECONDS, CONNECT_FOUR_TURN_SECONDS, CONNECT_FOUR_ROWS, CONNECT_FOUR_COLS, MAFIA_NIGHT_SECONDS, MAFIA_DAY_DISCUSSION_SECONDS, MAFIA_DAY_VOTE_SECONDS, SCENE_CHALLENGE_MAX_SUGGESTION_LENGTH, RPS_DUEL_ROUND_SECONDS, RPS_DUEL_WINS_NEEDED } from "../policies/partyRoomPolicy.js";
+import { HOST_INACTIVITY_TIMEOUT_SECONDS, MAX_ROOM_MEMBERS, MAX_VIDEO_PUBLISHERS, DEFAULT_ROOM_MODE_ID, validRoomModeId, DRAW_GUESS_CHOOSE_SECONDS, DRAW_GUESS_ROUND_SECONDS, SNAKE_LADDER_TURN_SECONDS, RUMMY_TURN_SECONDS, LUDO_TURN_SECONDS, TEEN_PATTI_TURN_SECONDS, ANDAR_BAHAR_BETTING_SECONDS, DRAGON_TIGER_BETTING_SECONDS, BIDDING_ROUND_SECONDS, TUG_OF_WAR_QUESTION_SECONDS, TUG_OF_WAR_TARGET_SCORE, ELIMINATION_REFLEX_MIN_PLAYERS, ELIMINATION_REFLEX_MAX_PLAYERS, ELIMINATION_REFLEX_ARM_MIN_MS, ELIMINATION_REFLEX_ARM_MAX_MS, ELIMINATION_REFLEX_TAP_WINDOW_SECONDS, PREDICTION_POOL_ROUND_SECONDS, PREDICTION_POOL_DEFAULT_RANGE_MAX, CHARADES_CHOOSE_SECONDS, CHARADES_ROUND_SECONDS, CONNECT_FOUR_TURN_SECONDS, CONNECT_FOUR_ROWS, CONNECT_FOUR_COLS, MAFIA_NIGHT_SECONDS, MAFIA_DAY_DISCUSSION_SECONDS, MAFIA_DAY_VOTE_SECONDS, SCENE_CHALLENGE_MAX_SUGGESTION_LENGTH, RPS_DUEL_ROUND_SECONDS, RPS_DUEL_WINS_NEEDED, VANISHING_TIC_TAC_TOE_TURN_SECONDS, VANISHING_TIC_TAC_TOE_MAX_MARKS_PER_PLAYER } from "../policies/partyRoomPolicy.js";
 import { MAFIA_MIN_PLAYERS, MAFIA_MAX_PLAYERS, MAFIA_ROLES, assignMafiaRoles, resolveMafiaNight, resolveMafiaDayVote, checkMafiaWinner } from "../policies/mafiaEngine.js";
 import { validArenaAvatarState } from "../policies/arenaPolicy.js";
 import { isPremiumAccount as sharedIsPremiumAccount } from "../auth/supabaseUser.js";
@@ -184,7 +184,8 @@ export class PartyRoomShard {
     const scene = room.mode === "scene_challenge" && room.game ? { status: room.game.status, currentScene: room.game.currentScene, currentPrompterId: room.game.currentPrompterId, suggestions: room.game.suggestions, history: room.game.history } : null;
     const rapBattle = room.mode === "rap_battle" && room.game ? this.publicRapBattleState(room) : null;
     const rpsDuel = room.mode === "rps_duel" && room.game ? this.publicRpsState(room) : null;
-    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia, freeze, scavenger, scene, rapBattle, rpsDuel, videoPublisherIds: room.videoPublisherIds, videoPublisherLimit: MAX_VIDEO_PUBLISHERS }));
+    const vanishingTicTacToe = room.mode === "vanishing_tic_tac_toe" && room.game ? this.publicVanishingTicTacToeState(room) : null;
+    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia, freeze, scavenger, scene, rapBattle, rpsDuel, vanishingTicTacToe, videoPublisherIds: room.videoPublisherIds, videoPublisherLimit: MAX_VIDEO_PUBLISHERS }));
     if (room.mode === "mafia" && room.game?.roles?.[participantId] && room.game.alive.includes(participantId)) {
       const role = room.game.roles[participantId];
       const mafiaIds = Object.entries(room.game.roles).filter(([, r]) => r === MAFIA_ROLES.MAFIA).map(([id]) => id);
@@ -992,6 +993,35 @@ export class PartyRoomShard {
         await this.state.storage.put("room", room);
         this.broadcastRpsState(room);
       }
+      return;
+    }
+
+    if (type === "TTT_START" && attachment.isHost) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "vanishing_tic_tac_toe") return;
+      if (room.game && room.game.status === "playing") return;
+      if (room.seatedParticipantIds.length !== 2) { socket.send(event("MESSAGE_REJECTED", { code: "vanishing_tic_tac_toe_needs_two_players" })); return; }
+      const players = [...room.seatedParticipantIds];
+      room.game = {
+        status: "playing", players, marks: Object.fromEntries(players.map(id => [id, "X"])),
+        board: Array(9).fill(null), placements: [], turnParticipantId: players[Math.floor(Math.random() * 2)],
+        phaseEndsAt: Date.now() + VANISHING_TIC_TAC_TOE_TURN_SECONDS * 1000,
+        winnerParticipantId: null, winningCells: null,
+      };
+      room.game.marks[players[1]] = "O";
+      await this.state.storage.put("room", room);
+      this.broadcastVanishingTicTacToeState(room);
+      await this.scheduleAlarm(room);
+      return;
+    }
+
+    if (type === "TTT_MOVE" && Number.isSafeInteger(payload.cell)) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "vanishing_tic_tac_toe" || !room.game || room.game.status !== "playing") return;
+      const participantId = attachment.participantId;
+      if (room.game.turnParticipantId !== participantId) return;
+      if (payload.cell < 0 || payload.cell >= 9 || room.game.board[payload.cell]) return;
+      this.applyVanishingTicTacToeMove(room, participantId, payload.cell);
       return;
     }
 
@@ -2574,6 +2604,80 @@ export class PartyRoomShard {
     this.broadcast(event("RPS_OVER", { winnerParticipantId, scores: room.game.scores, reason: "opponent_forfeit" }));
   }
 
+  ticTacToeWinCells(board) {
+    const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    for (const line of lines) {
+      const [a, b, c] = line;
+      if (board[a] && board[a] === board[b] && board[a] === board[c]) return line;
+    }
+    return null;
+  }
+
+  applyVanishingTicTacToeMove(room, participantId, cell) {
+    const mark = room.game.marks[participantId];
+    room.game.board[cell] = mark;
+    room.game.placements.push({ participantId, cell });
+    const winningCells = this.ticTacToeWinCells(room.game.board);
+    if (winningCells) {
+      room.game.status = "game_over";
+      room.game.winnerParticipantId = participantId;
+      room.game.winningCells = winningCells;
+      room.game.phaseEndsAt = null;
+      this.state.storage.put("room", room);
+      this.broadcastVanishingTicTacToeState(room);
+      this.broadcast(event("TTT_OVER", { winnerParticipantId: participantId, winningCells, reason: "three_in_a_row" }));
+      return;
+    }
+    const ownPlacements = room.game.placements.filter(placement => placement.participantId === participantId);
+    if (ownPlacements.length > VANISHING_TIC_TAC_TOE_MAX_MARKS_PER_PLAYER) {
+      const oldest = ownPlacements[0];
+      room.game.board[oldest.cell] = null;
+      room.game.placements = room.game.placements.filter(placement => placement !== oldest);
+    }
+    const [p1, p2] = room.game.players;
+    room.game.turnParticipantId = participantId === p1 ? p2 : p1;
+    room.game.phaseEndsAt = Date.now() + VANISHING_TIC_TAC_TOE_TURN_SECONDS * 1000;
+    this.state.storage.put("room", room);
+    this.broadcastVanishingTicTacToeState(room);
+    this.scheduleAlarm(room);
+  }
+
+  publicVanishingTicTacToeState(room) {
+    const game = room.game;
+    return {
+      status: game.status, players: game.players, marks: game.marks, board: game.board,
+      turnParticipantId: game.turnParticipantId, phaseEndsAt: game.phaseEndsAt,
+      winnerParticipantId: game.winnerParticipantId || null, winningCells: game.winningCells || null,
+      maxMarksPerPlayer: VANISHING_TIC_TAC_TOE_MAX_MARKS_PER_PLAYER,
+    };
+  }
+
+  broadcastVanishingTicTacToeState(room) {
+    this.broadcast(event("TTT_STATE", this.publicVanishingTicTacToeState(room)));
+  }
+
+  async resolveVanishingTicTacToeTimeout(room) {
+    const participantId = room.game.turnParticipantId;
+    const emptyCells = room.game.board.map((value, index) => (value ? null : index)).filter(index => index !== null);
+    if (!emptyCells.length) return;
+    const cell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    this.applyVanishingTicTacToeMove(room, participantId, cell);
+  }
+
+  async handleVanishingTicTacToeDisconnect(participantId) {
+    const room = (await this.state.storage.get("room")) || {};
+    if (room.mode !== "vanishing_tic_tac_toe" || !room.game || room.game.status !== "playing") return;
+    if (!room.game.players.includes(participantId)) return;
+    const [p1, p2] = room.game.players;
+    const winnerParticipantId = participantId === p1 ? p2 : p1;
+    room.game.status = "game_over";
+    room.game.winnerParticipantId = winnerParticipantId;
+    room.game.phaseEndsAt = null;
+    await this.state.storage.put("room", room);
+    this.broadcastVanishingTicTacToeState(room);
+    this.broadcast(event("TTT_OVER", { winnerParticipantId, reason: "opponent_forfeit" }));
+  }
+
   publicEliminationReflexState(room, participantId) {
     const game = room.game;
     return {
@@ -2787,6 +2891,7 @@ export class PartyRoomShard {
     await this.handleTeenPattiDisconnect(attachment.participantId);
     await this.handleConnectFourDisconnect(attachment.participantId);
     await this.handleRpsDisconnect(attachment.participantId);
+    await this.handleVanishingTicTacToeDisconnect(attachment.participantId);
     await this.handleMafiaDisconnect(attachment.participantId);
     await this.handleFreezeDisconnect(attachment.participantId);
     const roomForVideo = (await this.state.storage.get("room")) || {};
@@ -2921,6 +3026,8 @@ export class PartyRoomShard {
         await this.resolveConnectFourTimeout(room);
       } else if (room.mode === "rps_duel" && room.game.status === "playing") {
         await this.resolveRpsRound(room);
+      } else if (room.mode === "vanishing_tic_tac_toe" && room.game.status === "playing") {
+        await this.resolveVanishingTicTacToeTimeout(room);
       } else if (room.mode === "elimination_reflex" && room.game.status === "waiting_round") {
         room.game.status = "armed";
         room.game.phaseEndsAt = Date.now() + ELIMINATION_REFLEX_TAP_WINDOW_SECONDS * 1000;
