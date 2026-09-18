@@ -13,26 +13,39 @@ function downloadBlob(blob,extension){
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
-function closeModal(modal){modal.remove();if(activeRecorder?.stream)for(const track of activeRecorder.stream.getTracks())track.stop();activeRecorder=null;}
+function closeModal(modal){modal.remove();if(activeRecorder?.stream)for(const track of activeRecorder.stream.getTracks())track.stop();if(activeRecorder?.micStream)for(const track of activeRecorder.micStream.getTracks())track.stop();activeRecorder?.audioContext?.close();activeRecorder=null;}
 
-async function startScreenRecording(statusEl,startBtn,stopBtn){
-  let stream;
-  try{stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});}
+function buildOutputStream(displayStream,micStream){
+  const videoTracks=displayStream.getVideoTracks();
+  const displayAudioTracks=displayStream.getAudioTracks();
+  if(!micStream||(!displayAudioTracks.length&&!micStream.getAudioTracks().length))return{outputStream:new MediaStream([...videoTracks,...displayAudioTracks]),audioContext:null};
+  const audioContext=new AudioContext(),destination=audioContext.createMediaStreamDestination();
+  if(displayAudioTracks.length)audioContext.createMediaStreamSource(new MediaStream(displayAudioTracks)).connect(destination);
+  if(micStream.getAudioTracks().length)audioContext.createMediaStreamSource(micStream).connect(destination);
+  return{outputStream:new MediaStream([...videoTracks,...destination.stream.getAudioTracks()]),audioContext};
+}
+
+async function startScreenRecording(statusEl,startBtn,stopBtn,includeMic){
+  let displayStream;
+  try{displayStream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});}
   catch{statusEl.textContent="Screen share was cancelled or denied.";return;}
+  let micStream=null;
+  if(includeMic){try{micStream=await navigator.mediaDevices.getUserMedia({audio:true});}catch{statusEl.textContent="Microphone permission denied — recording screen audio only.";}}
   const mimeType=pickMimeType();
-  if(!mimeType){statusEl.textContent="This browser can't record video.";for(const track of stream.getTracks())track.stop();return;}
-  const chunks=[],recorder=new MediaRecorder(stream,{mimeType});
+  if(!mimeType){statusEl.textContent="This browser can't record video.";for(const track of displayStream.getTracks())track.stop();return;}
+  const{outputStream,audioContext}=buildOutputStream(displayStream,micStream);
+  const chunks=[],recorder=new MediaRecorder(outputStream,{mimeType});
   recorder.ondataavailable=event=>{if(event.data.size)chunks.push(event.data);};
   recorder.onstop=()=>{
     const blob=new Blob(chunks,{type:mimeType}),extension=mimeType.startsWith("video/mp4")?"mp4":"webm";
     downloadBlob(blob,extension);
-    statusEl.textContent=`Saved as .${extension}${extension==="webm"?" (this browser can only record webm, not mp4)":""}.`;
+    statusEl.textContent=`Saved as .${extension}${extension==="webm"?" (this browser can only record webm, not mp4)":""} — ready to post.`;
     startBtn.disabled=false;stopBtn.disabled=true;
   };
-  stream.getVideoTracks()[0].addEventListener("ended",()=>{if(recorder.state==="recording")recorder.stop();});
-  activeRecorder={recorder,stream};
+  displayStream.getVideoTracks()[0].addEventListener("ended",()=>{if(recorder.state==="recording")recorder.stop();});
+  activeRecorder={recorder,stream:displayStream,micStream,audioContext};
   recorder.start();
-  statusEl.textContent="Recording your screen…";
+  statusEl.textContent="Recording your screen and audio…";
   startBtn.disabled=true;stopBtn.disabled=false;
 }
 
@@ -48,7 +61,8 @@ export function openRecordingModal({accountSession,loadAccountApi,recordingCredi
       <button type="button" class="btn btn-ghost" data-recording-tab="stream" aria-pressed="false">📡 Stream live</button>
     </div>
     <div data-recording-panel="record">
-      <p class="muted">Recording happens entirely on your device — nothing is uploaded. Costs ${recordingCreditsPerSession} Credits per recording session, charged once you start.</p>
+      <p class="muted">Recording happens entirely on your device — nothing is uploaded. Captures your screen plus audio, so the file is ready to post straight to social media. Costs ${recordingCreditsPerSession} Credits per recording session, charged once you start.</p>
+      <label style="display:flex;gap:10px;margin:10px 0"><input type="checkbox" id="recording-include-mic" checked><span>Include my microphone (narrate over the recording)</span></label>
       <div class="inline-form">
         <button type="button" class="btn btn-primary" id="recording-start-btn">Start recording</button>
         <button type="button" class="btn btn-ghost" id="recording-stop-btn" disabled>Stop &amp; download</button>
@@ -88,7 +102,8 @@ export function openRecordingModal({accountSession,loadAccountApi,recordingCredi
       const requestId=crypto.randomUUID();
       const result=await accountApi.startRecording(accountSession,requestId);
       onWalletUpdate?.(result.balance);
-      await startScreenRecording(statusEl,startBtn,stopBtn);
+      const includeMic=modal.querySelector("#recording-include-mic")?.checked!==false;
+      await startScreenRecording(statusEl,startBtn,stopBtn,includeMic);
     }catch(error){
       statusEl.textContent=friendlyError?.(error.message)||error.message||"Couldn't start recording.";
       startBtn.disabled=false;
