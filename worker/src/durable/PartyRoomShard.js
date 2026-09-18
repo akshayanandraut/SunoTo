@@ -324,10 +324,6 @@ export class PartyRoomShard {
           this.broadcast(event("MESSAGE_REJECTED", { code: "connect_four_round_in_progress" }));
           return;
         }
-        if (room.mode === "rps_duel" && room.game.status === "playing") {
-          this.broadcast(event("MESSAGE_REJECTED", { code: "rps_duel_round_in_progress" }));
-          return;
-        }
         if (room.mode === "mafia" && ["night", "day_discussion", "day_vote"].includes(room.game.status)) {
           this.broadcast(event("MESSAGE_REJECTED", { code: "mafia_round_in_progress" }));
           return;
