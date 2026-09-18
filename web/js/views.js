@@ -356,6 +356,33 @@ const standupPanel=(state,isHost)=>{
   return `<div id="standup-panel" class="no-copy-zone game-panel"><p class="eyebrow">🎙️ Open Mic</p>${status}<div id="standup-reactions" style="position:relative;height:0"></div><div class="inline-form" style="margin-top:6px">${reactions.map(([id,emoji])=>`<button class="btn btn-ghost" data-radio-reaction="${id}" type="button">${emoji}</button>`).join("")}</div></div>`;
 };
 
+const FREEZE_CHALLENGES=[["statue","🗿 Statue — first to move loses"],["staring","👀 Staring Contest — first to blink loses"],["laugh","😂 First to Laugh loses"],["steady_finger","☝️ Steady Finger — touch a desk, first to lift it loses"]];
+const freezeChallengePanel=(state,isHost)=>{
+  const game=state.partyFreeze||{status:"idle"};
+  const myId=state.partyParticipantId;
+  const alive=game.alive||[],out=game.out||[];
+  if(game.status!=="active"&&game.status!=="finished"){
+    return `<div id="freeze-panel" class="no-copy-zone game-panel"><p class="eyebrow">🧊 Freeze Challenge</p><p class="muted">Play it for real in the room, then self-report here — there's no camera detection, it's the honor system.</p>${isHost?`<form id="freeze-start-form" class="inline-form" style="flex-wrap:wrap">${FREEZE_CHALLENGES.map(([id,label])=>`<button class="btn btn-ghost" data-freeze-start="${id}" type="button">${label}</button>`).join("")}</form>`:`<p class="muted">Waiting for the host to start a round.</p>`}</div>`;
+  }
+  const challengeLabel=FREEZE_CHALLENGES.find(([id])=>id===game.challenge)?.[1]||"";
+  const rows=alive.map(id=>`<div>${id===myId?"You":escapeText(peerHandle(id))} — still in</div>`).join("")+out.slice().reverse().map(id=>`<div class="muted">${id===myId?"You":escapeText(peerHandle(id))} — out</div>`).join("");
+  const finished=game.status==="finished"?`<p><strong>${game.winnerParticipantId?(game.winnerParticipantId===myId?"You win! 🏆":`${escapeText(peerHandle(game.winnerParticipantId))} wins! 🏆`):"No winner — everyone's out."}</strong></p>${isHost?`<form id="freeze-start-form" class="inline-form" style="flex-wrap:wrap">${FREEZE_CHALLENGES.map(([id,label])=>`<button class="btn btn-ghost" data-freeze-start="${id}" type="button">${label}</button>`).join("")}</form>`:""}`:(alive.includes(myId)?`<button class="btn btn-primary" id="freeze-out-btn" type="button">I'm out</button>`:`<p class="muted">You're out — watch the rest play.</p>`);
+  return `<div id="freeze-panel" class="no-copy-zone game-panel"><p class="eyebrow">🧊 ${challengeLabel}</p>${finished}<div class="saved-list" style="margin-top:10px">${rows}</div></div>`;
+};
+
+const scavengerHuntPanel=(state,isHost)=>{
+  const game=state.partyScavenger||{status:"idle"};
+  const myId=state.partyParticipantId;
+  const found=game.foundOrder||[];
+  const idle=game.status!=="active"&&game.status!=="finished";
+  const startForm=isHost?`<form id="scavenger-start-form" class="inline-form"><input name="prompt" maxlength="80" placeholder="e.g. Something blue, a spoon, a book…" ${idle?"required":""}><button class="btn btn-primary">${idle?"Start hunt":"New round"}</button></form>`:"";
+  if(idle)return `<div id="scavenger-panel" class="no-copy-zone game-panel"><p class="eyebrow">🔎 Scavenger Hunt</p><p class="muted">${isHost?"Name an object or color — everyone races to find it and tap the button first.":"Waiting for the host to start a round."}</p>${startForm}</div>`;
+  const iFound=found.some(entry=>entry.participantId===myId);
+  const rankRows=found.map((entry,index)=>`<div>#${index+1} ${entry.participantId===myId?"You":escapeText(peerHandle(entry.participantId))}</div>`).join("")||`<p class="muted">No one yet — go!</p>`;
+  const action=game.status==="finished"?"":(iFound?`<p class="muted">Found it — waiting on the rest.</p>`:`<button class="btn btn-primary" id="scavenger-found-btn" type="button">Found it! ✋</button>`);
+  return `<div id="scavenger-panel" class="no-copy-zone game-panel"><p class="eyebrow">🔎 Find: <strong>${escapeText(game.prompt||"")}</strong></p>${action}<div class="saved-list" style="margin-top:10px">${rankRows}</div>${isHost?`<div style="margin-top:10px">${game.status!=="finished"?`<button class="btn btn-ghost" id="scavenger-end-btn" type="button">End round</button>`:""}${startForm}</div>`:""}</div>`;
+};
+
 const mafiaPanel=(state,isHost)=>{
   const game=state.partyMafia||{status:"lobby"};
   const status=game.status||"lobby";
@@ -686,7 +713,7 @@ export const views = {
       const videoGrid=isVideo?`<div class="video-panel" id="party-video-grid">${(state.partyVideoParticipants||[]).length?"":'<p class="video-connecting">Waiting for others to join with video…</p>'}<video id="party-video-local" autoplay playsinline muted></video>${(state.partyVideoParticipants||[]).map(id=>`<video data-party-video="${escapeText(id)}" autoplay playsinline></video>`).join("")}${state.partyLocalVideoOn?`<button class="btn btn-ghost" id="party-video-mute-toggle" type="button" aria-label="Mute microphone" aria-pressed="false">🎤</button><button class="btn btn-ghost" id="party-video-camera-toggle" type="button" aria-label="Turn off camera" aria-pressed="false">📷</button>`:""}</div><p class="muted" style="margin-top:6px">${videoPublisherIds.length}/${videoPublisherLimit} cameras in use — the rest of the room can still watch and chat.</p><button class="btn btn-ghost" id="party-start-video" type="button" ${videoAtCap?"disabled":""}>${state.partyLocalVideoOn?"Video on":videoAtCap?"Video full":"Turn on camera & mic"}</button>`:"";
       const availableModes=state.featureFlags?.arena_enabled===false?ROOM_MODES.filter(item=>item.id!=="arena"):ROOM_MODES;
       const modeSwitcher=isHost?`<form id="party-mode-form" class="inline-form"><select name="mode">${availableModes.map(item=>`<option value="${item.id}" ${item.id===mode?"selected":""}>${escapeText(item.name)}</option>`).join("")}</select><button class="btn btn-ghost">Switch mode</button></form>`:`<p class="muted">Mode: ${escapeText(ROOM_MODES.find(item=>item.id===mode)?.name||mode)}</p>`;
-      const modePanel=mode==="game"?drawGuessPanel(state,isHost):mode==="snake_ladder"?snakeLadderPanel(state,isHost):mode==="rummy"?rummyPanel(state,isHost):mode==="ludo"?ludoPanel(state,isHost):mode==="teen_patti"?teenPattiPanel(state,isHost):mode==="andar_bahar"?andarBaharPanel(state,isHost):mode==="dragon_tiger"?dragonTigerPanel(state,isHost):mode==="bidding"?biddingPanel(state,isHost):mode==="tug_of_war"?tugOfWarPanel(state,isHost):mode==="elimination_reflex"?eliminationReflexPanel(state,isHost):mode==="prediction_pool"?predictionPoolPanel(state,isHost):mode==="charades"?charadesPanel(state,isHost):mode==="connect_four"?connectFourPanel(state,isHost):mode==="arena"?arenaPanel(state):mode==="mafia"?mafiaPanel(state,isHost):mode==="standup"?standupPanel(state,isHost):"";
+      const modePanel=mode==="game"?drawGuessPanel(state,isHost):mode==="snake_ladder"?snakeLadderPanel(state,isHost):mode==="rummy"?rummyPanel(state,isHost):mode==="ludo"?ludoPanel(state,isHost):mode==="teen_patti"?teenPattiPanel(state,isHost):mode==="andar_bahar"?andarBaharPanel(state,isHost):mode==="dragon_tiger"?dragonTigerPanel(state,isHost):mode==="bidding"?biddingPanel(state,isHost):mode==="tug_of_war"?tugOfWarPanel(state,isHost):mode==="elimination_reflex"?eliminationReflexPanel(state,isHost):mode==="prediction_pool"?predictionPoolPanel(state,isHost):mode==="charades"?charadesPanel(state,isHost):mode==="connect_four"?connectFourPanel(state,isHost):mode==="arena"?arenaPanel(state):mode==="mafia"?mafiaPanel(state,isHost):mode==="standup"?standupPanel(state,isHost):mode==="freeze_challenge"?freezeChallengePanel(state,isHost):mode==="scavenger_hunt"?scavengerHuntPanel(state,isHost):"";
       const isRadio=room.roomType==="radio",track=state.partyCurrentTrack,votes=state.partyRadioVotes||{skipVotes:0,replayVotes:0,totalMembers:1};
       const queueTracks=state.partyQueueTracks||[];
       const queueSidebar=isRadio&&isMusic&&queueTracks.length?`<div class="saved-list" id="party-radio-queue" style="margin-top:14px"><p class="eyebrow">Playlist</p>${queueTracks.map(item=>`<article class="saved-item"><div>${item.status==="playing"?"▶ ":""}${escapeText(item.title)}${item.artistName?` <span class="muted">— ${escapeText(item.artistName)}</span>`:""}${item.listenerMessage?`<p class="muted" style="margin:2px 0 0">💬 ${escapeText(item.listenerMessage)}</p>`:""}</div></article>`).join("")}</div>`:"";

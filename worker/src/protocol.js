@@ -23,7 +23,7 @@ export function parseClientEvent(raw){
     return{ok:true,event:{...event,payload:{data,durationSeconds}}};
   }
   if(event.type==="TYPING"){const typing=event.payload?.typing;if(typeof typing!=="boolean")return{ok:false,code:"invalid_typing"};return{ok:true,event:{...event,payload:{typing}}};}
-  if(event.type==="EXPERIENCE_SIGNAL"){const signal=event.payload?.signal;if(!["laughed"].includes(signal))return{ok:false,code:"invalid_experience_signal"};return{ok:true,event:{...event,payload:{signal}}};}
+  if(event.type==="EXPERIENCE_SIGNAL"){const signal=event.payload?.signal;if(!["laughed","moved","blinked"].includes(signal))return{ok:false,code:"invalid_experience_signal"};return{ok:true,event:{...event,payload:{signal}}};}
   if(["HELLO","HEARTBEAT","SESSION_RESUME","ACTIVITY","NEXT_REQUEST","SESSION_END","CONTINUE_ACCEPT","CONTINUE_DECLINE","CONTACT_UNLOCK_REQUEST","CONTACT_UNLOCK_ACCEPT","CONTACT_UNLOCK_DECLINE","LIKE","BLOCK","VIDEO_END"].includes(event.type))return{ok:true,event};
   return{ok:false,code:"unsupported_event"};
 }

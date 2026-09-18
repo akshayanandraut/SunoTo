@@ -14,7 +14,10 @@ export const EXPERIENCE_TYPES = Object.freeze([
   { id: "blind_video_date", label: "Blind Video Date", icon: "🎭", description: "Video from the first second — no text warmup.", video: true },
   { id: "podcast_interview", label: "Podcast Interview", icon: "🎙️", description: "A 7-minute video Q&A — one of you interviews, the other spills.", video: true },
   { id: "dad_joke_duel", label: "Dad Joke Duel", icon: "😂", description: "Trade dad jokes on video — first one to laugh loses.", video: true },
+  { id: "statue_duel", label: "Statue Duel", icon: "🗿", description: "Freeze on video — first one to move loses.", video: true },
+  { id: "staring_contest", label: "Staring Contest", icon: "👀", description: "Lock eyes on video — first one to blink loses.", video: true },
 ]);
+export const DUEL_EXPERIENCE_TYPES = Object.freeze(["dad_joke_duel", "statue_duel", "staring_contest"]);
 const EXPERIENCE_TYPE_IDS = new Set(EXPERIENCE_TYPES.map(item => item.id));
 export function validExperienceType(value) {
   return EXPERIENCE_TYPE_IDS.has(value) ? value : null;

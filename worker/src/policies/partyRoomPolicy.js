@@ -37,6 +37,8 @@ export const ROOM_MODES=[
   {id:"arena",name:"Arena (early prototype, premium)"},
   {id:"mafia",name:"Mafia (social deduction)"},
   {id:"standup",name:"Open Mic / Standup"},
+  {id:"freeze_challenge",name:"Freeze Challenge (Statue/Staring/Laugh)"},
+  {id:"scavenger_hunt",name:"Scavenger Hunt"},
 ];
 export const DRAW_GUESS_CHOOSE_SECONDS=15;
 export const DRAW_GUESS_ROUND_SECONDS=75;

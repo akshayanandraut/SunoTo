@@ -10,6 +10,7 @@ import { AnalyticsService } from "../services/AnalyticsService.js";
 import { ConfigService } from "../services/ConfigService.js";
 import { videoEligible } from "../policies/videoPolicy.js";
 import { StreamingMembershipService } from "../services/StreamingMembershipService.js";
+import { DUEL_EXPERIENCE_TYPES } from "../policies/experiencePolicy.js";
 const PARTICIPANTS_KEY="participants",SESSION_KEY="session";
 function virtualPeerFrom(value){if(!value||value.length>6000)return null;try{const peer=JSON.parse(value);return peer?.identityId&&peer?.persona&&peer?.config?peer:null}catch{return null}}
 // Workers AI doesn't hand back exact token usage in every response shape, so this is a deliberately
@@ -107,12 +108,12 @@ const previousExperienceType=previous.experienceType||experienceType||null;if(re
   }
   async checkSpam(identityId,sessionId,text){if(!this.env?.ANONYMOUS||text.trim().length<20)return{allowed:true};const normalized=text.toLowerCase().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"").trim(),digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(normalized)),fingerprint=[...new Uint8Array(digest)].slice(0,12).map(value=>value.toString(16).padStart(2,"0")).join(""),namespace=this.env.ANONYMOUS,stub=namespace.get(namespace.idFromName("global")),response=await stub.fetch("https://anonymous.internal/spam-fingerprint",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({identityId,sessionId,fingerprint})});return response.json();}
   async flagEnabled(key){try{return(await new ConfigService(this.env,this.env.FETCHER||fetch).flags()).config[key]!==false;}catch{return true}}
-  // Laughter can't be detected server-side (no audio processing) -- this is a self-report, honor
-  // system by design, same as any party game. Only meaningful in the dad-joke-duel experience, but
-  // harmless to ignore for anyone else who somehow sends it.
+  // Moving/blinking/laughing can't be detected server-side (no camera/audio processing) -- this is
+  // a self-report, honor system by design, same as any party game. Only meaningful for the duel
+  // experience types, but harmless to ignore for anyone else who somehow sends it.
   handleExperienceSignal(socket,participantId,session){
     if(session.ended||session.virtualPeer)return;
-    if(session.participants[participantId]?.experienceType!=="dad_joke_duel")return;
+    if(!DUEL_EXPERIENCE_TYPES.includes(session.participants[participantId]?.experienceType))return;
     socket.send(serverEvent("EXPERIENCE_RESULT",{outcome:"lost"}));
     this.sendToPeers(socket,"EXPERIENCE_RESULT",{outcome:"won"});
     session.ended=true;

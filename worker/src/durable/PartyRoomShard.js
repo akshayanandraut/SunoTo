@@ -179,7 +179,9 @@ export class PartyRoomShard {
     const predictionPool = room.mode === "prediction_pool" && room.game ? this.publicPredictionPoolState(room, participantId) : null;
     const charades = room.mode === "charades" && room.game ? { status: room.game.status, performerParticipantId: room.game.performerParticipantId, wordLength: room.game.wordLength, phaseEndsAt: room.game.phaseEndsAt, scores: room.game.scores, roundsPlayed: room.game.roundsPlayed, totalRounds: room.game.totalRounds } : null;
     const mafia = room.mode === "mafia" && room.game ? this.publicMafiaState(room) : null;
-    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia, videoPublisherIds: room.videoPublisherIds, videoPublisherLimit: MAX_VIDEO_PUBLISHERS }));
+    const freeze = room.mode === "freeze_challenge" && room.game ? { status: room.game.status, challenge: room.game.challenge, alive: room.game.alive, out: room.game.out, winnerParticipantId: room.game.winnerParticipantId } : null;
+    const scavenger = room.mode === "scavenger_hunt" && room.game ? { status: room.game.status, prompt: room.game.prompt, foundOrder: room.game.foundOrder } : null;
+    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia, freeze, scavenger, videoPublisherIds: room.videoPublisherIds, videoPublisherLimit: MAX_VIDEO_PUBLISHERS }));
     if (room.mode === "mafia" && room.game?.roles?.[participantId] && room.game.alive.includes(participantId)) {
       const role = room.game.roles[participantId];
       const mafiaIds = Object.entries(room.game.roles).filter(([, r]) => r === MAFIA_ROLES.MAFIA).map(([id]) => id);
@@ -1277,6 +1279,68 @@ export class PartyRoomShard {
       return;
     }
 
+    // Freeze Challenge covers Statue, Staring Contest, First to Laugh and Steady Finger -- all are
+    // the same self-report elimination mechanic in real life (no camera-based motion/blink/laughter
+    // detection here), so one game state machine serves every "challenge" label.
+    if (type === "FREEZE_START" && attachment.isHost && ["statue", "staring", "laugh", "steady_finger"].includes(payload.challenge)) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "freeze_challenge") return;
+      const bySocket = new Map(this.state.getWebSockets().map(s => [(s.deserializeAttachment() || {}).participantId, s.deserializeAttachment() || {}]));
+      const alive = (room.seatedParticipantIds || []).filter(id => bySocket.has(id));
+      if (alive.length < 2) { socket.send(event("MESSAGE_REJECTED", { code: "freeze_needs_two_players" })); return; }
+      room.game = { status: "active", challenge: payload.challenge, alive, out: [], winnerParticipantId: null };
+      await this.state.storage.put("room", room);
+      this.broadcastFreezeState(room);
+      return;
+    }
+
+    if (type === "FREEZE_OUT") {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "freeze_challenge" || !room.game || room.game.status !== "active") return;
+      const myId = attachment.participantId;
+      if (!room.game.alive.includes(myId)) return;
+      room.game.alive = room.game.alive.filter(id => id !== myId);
+      room.game.out.push(myId);
+      if (room.game.alive.length <= 1) {
+        room.game.status = "finished";
+        room.game.winnerParticipantId = room.game.alive[0] || null;
+      }
+      await this.state.storage.put("room", room);
+      this.broadcastFreezeState(room);
+      return;
+    }
+
+    // Scavenger Hunt: host names an object/color to find, players self-report when they have it in
+    // hand -- ordered by report time, no server-side verification is possible for a physical object.
+    if (type === "SCAVENGER_START" && attachment.isHost && typeof payload.prompt === "string" && payload.prompt.trim() && payload.prompt.length <= 80) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "scavenger_hunt") return;
+      room.game = { status: "active", prompt: payload.prompt.trim(), foundOrder: [] };
+      await this.state.storage.put("room", room);
+      this.broadcastScavengerState(room);
+      return;
+    }
+
+    if (type === "SCAVENGER_FOUND") {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "scavenger_hunt" || !room.game || room.game.status !== "active") return;
+      const myId = attachment.participantId;
+      if (room.game.foundOrder.some(entry => entry.participantId === myId)) return;
+      room.game.foundOrder.push({ participantId: myId, at: Date.now() });
+      await this.state.storage.put("room", room);
+      this.broadcastScavengerState(room);
+      return;
+    }
+
+    if (type === "SCAVENGER_END" && attachment.isHost) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "scavenger_hunt" || !room.game) return;
+      room.game.status = "finished";
+      await this.state.storage.put("room", room);
+      this.broadcastScavengerState(room);
+      return;
+    }
+
     if (type === "VIDEO_START" && attachment.seated) {
       const room = (await this.state.storage.get("room")) || {};
       room.videoPublisherIds ??= [];
@@ -1348,6 +1412,16 @@ export class PartyRoomShard {
 
   broadcastMafiaState(room) {
     this.broadcast(event("MAFIA_STATE", this.publicMafiaState(room)));
+  }
+
+  broadcastFreezeState(room) {
+    const game = room.game;
+    this.broadcast(event("FREEZE_STATE", { status: game.status, challenge: game.challenge, alive: game.alive, out: game.out, winnerParticipantId: game.winnerParticipantId }));
+  }
+
+  broadcastScavengerState(room) {
+    const game = room.game;
+    this.broadcast(event("SCAVENGER_STATE", { status: game.status, prompt: game.prompt, foundOrder: game.foundOrder }));
   }
 
   async maybeResolveMafiaNight(room) {

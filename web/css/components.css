@@ -55,3 +55,7 @@
 .icebreaker-chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 10px}
 .icebreaker-chips .chip{cursor:pointer}
 .experience-chat-extras{padding:10px 16px;border-bottom:1px solid var(--line)}
+.chat-layout--theme-statue_duel{background:linear-gradient(180deg,rgba(140,140,140,0.14),transparent 150px)}
+.chat-layout--theme-statue_duel .chat-theme-banner{background:rgba(140,140,140,0.2)}
+.chat-layout--theme-staring_contest{background:linear-gradient(180deg,rgba(0,140,180,0.1),transparent 150px)}
+.chat-layout--theme-staring_contest .chat-theme-banner{background:rgba(0,140,180,0.15)}
