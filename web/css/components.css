@@ -63,3 +63,6 @@
 .chat-layout--theme-sleep_duel .chat-theme-banner{background:rgba(60,40,120,0.18);color:#ece8ff}
 .chat-layout--theme-logout_duel{background:linear-gradient(180deg,rgba(200,60,60,0.09),transparent 150px)}
 .chat-layout--theme-logout_duel .chat-theme-banner{background:rgba(200,60,60,0.14)}
+.chat-layout--theme-roleplay{background:linear-gradient(180deg,rgba(150,60,180,0.1),transparent 150px)}
+.chat-layout--theme-roleplay .chat-theme-banner{background:rgba(150,60,180,0.16);color:#f5e8ff}
+#roleplay-roles{margin:8px 0;padding:10px 12px;border-radius:8px;background:rgba(150,60,180,0.08)}

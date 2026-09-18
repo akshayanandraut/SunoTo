@@ -18,8 +18,38 @@ export const EXPERIENCE_TYPES = Object.freeze([
   { id: "staring_contest", label: "Staring Contest", icon: "👀", description: "Lock eyes on video — first one to blink loses.", video: true },
   { id: "sleep_duel", label: "Sleep Duel", icon: "😴", description: "Stay up together on video — first one to doze off loses.", video: true },
   { id: "logout_duel", label: "Logout Duel", icon: "🚪", description: "Last one still connected wins — whoever closes the chat first loses.", video: false },
+  { id: "roleplay", label: "Roleplay", icon: "🎭", description: "You'll each be given a random role — play it out and see where it goes.", video: false },
 ]);
 export const DUEL_EXPERIENCE_TYPES = Object.freeze(["dad_joke_duel", "statue_duel", "staring_contest", "sleep_duel"]);
+
+// Loosely-related pairs read funnier than random shuffles of a flat role list (e.g. Doctor+Patient
+// beats Doctor+Astronaut), but a few wildcards are mixed in since the request was "whatever, keep it
+// interesting" -- not everything needs a straight-faced professional logic to it.
+export const ROLEPLAY_PAIRS = Object.freeze([
+  { a: "Doctor", b: "Patient with a mystery symptom" },
+  { a: "Plumber", b: "Homemaker with a flooding kitchen" },
+  { a: "Therapist", b: "Client who won't stop deflecting" },
+  { a: "Mobile Repair Guy", b: "Customer whose phone is 'possessed'" },
+  { a: "Eccentric Millionaire", b: "Brand-new Butler" },
+  { a: "Ninja", b: "Accountant doing their taxes" },
+  { a: "Detective", b: "Prime Suspect" },
+  { a: "Chef", b: "Ruthless Food Critic" },
+  { a: "Teacher", b: "Student who forgot the homework" },
+  { a: "Astronaut", b: "Mission Control on a bad day" },
+  { a: "Vampire", b: "Door-to-door Salesperson" },
+  { a: "Alien on its first day on Earth", b: "Very confused Local" },
+  { a: "Superhero, off duty", b: "Nosy Neighbour" },
+  { a: "Wedding Planner", b: "Bridezilla" },
+  { a: "Pirate Captain", b: "Nervous New Recruit" },
+  { a: "Time Traveler from 2150", b: "Skeptical Barista" },
+  { a: "Landlord", b: "Tenant with a broken tap since forever" },
+  { a: "Fortune Teller", b: "Total Skeptic" },
+  { a: "Robot learning to be human", b: "Its exhausted Trainer" },
+  { a: "Food Delivery Rider", b: "Person who ordered 10 minutes ago" },
+]);
+export function randomRoleplayPair(random = Math.random) {
+  return ROLEPLAY_PAIRS[Math.floor(random() * ROLEPLAY_PAIRS.length)];
+}
 const EXPERIENCE_TYPE_IDS = new Set(EXPERIENCE_TYPES.map(item => item.id));
 export function validExperienceType(value) {
   return EXPERIENCE_TYPE_IDS.has(value) ? value : null;
