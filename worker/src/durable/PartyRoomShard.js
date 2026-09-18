@@ -112,11 +112,14 @@ export class PartyRoomShard {
     }
     const seatedCount = room.seatedParticipantIds.length;
     const isPreauthorized = Boolean(accountUserId && room.preauthorizedAccountIds.includes(accountUserId));
-    const wantsSeat = roomTypeHint === "radio" || isHost || isPreauthorized;
-    if (wantsSeat && roomTypeHint !== "radio" && seatedCount >= MAX_ROOM_MEMBERS && !isHost) {
+    const isStandup = room.mode === "standup";
+    const wantsSeat = roomTypeHint === "radio" || isHost || isPreauthorized || isStandup;
+    if (wantsSeat && roomTypeHint !== "radio" && !isStandup && seatedCount >= MAX_ROOM_MEMBERS && !isHost) {
       return Response.json({ error: "room_full" }, { status: 409 });
     }
-    const seated = roomTypeHint === "radio" || isHost || (isPreauthorized && seatedCount < MAX_ROOM_MEMBERS);
+    // Standup crowd is text-chat + reaction only, uncapped like a radio audience -- the seat cap
+    // exists to bound game/video mesh size, which doesn't apply here since only the host publishes.
+    const seated = roomTypeHint === "radio" || isHost || isStandup || (isPreauthorized && seatedCount < MAX_ROOM_MEMBERS);
     const isCoHost = Boolean(accountUserId && room.coHostAccountIds.includes(accountUserId));
 
     const pair = new WebSocketPair();
@@ -353,7 +356,7 @@ export class PartyRoomShard {
       this.broadcast(event("PLAYBACK_SYNC", payload), socket);
       return;
     }
-    if (type === "RADIO_REACTION" && attachment.seated && ["like", "heart", "fire", "clap"].includes(payload.reaction)) {
+    if (type === "RADIO_REACTION" && attachment.seated && ["like", "heart", "fire", "clap", "laugh"].includes(payload.reaction)) {
       this.broadcast(event("RADIO_REACTION", { reaction: payload.reaction, participantId: attachment.participantId }), socket);
       return;
     }
@@ -1277,6 +1280,10 @@ export class PartyRoomShard {
     if (type === "VIDEO_START" && attachment.seated) {
       const room = (await this.state.storage.get("room")) || {};
       room.videoPublisherIds ??= [];
+      if (room.mode === "standup" && !attachment.isHost) {
+        socket.send(event("MESSAGE_REJECTED", { code: "standup_performer_only" }));
+        return;
+      }
       if (room.videoPublisherIds.includes(attachment.participantId)) return;
       if (room.videoPublisherIds.length >= MAX_VIDEO_PUBLISHERS) {
         try { await new AnalyticsService(this.env, this.env.FETCHER || fetch).record({ eventId: `party-video-cap-hit:${crypto.randomUUID()}`, eventName: "party_video_publisher_cap_hit", dimension: "total", value: 1 }); } catch {}

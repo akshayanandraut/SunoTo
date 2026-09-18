@@ -28,3 +28,30 @@
 .ui-theme-option:hover{background:var(--paper)}
 .ui-theme-option.active{background:var(--mint)}
 .ui-theme-option small{font-weight:500;color:var(--muted)}
+.chat-theme-banner{display:flex;align-items:center;gap:10px;padding:10px 16px;font-weight:700;border-bottom:1px solid var(--line)}
+.chat-theme-banner .chat-theme-icon{font-size:1.3em}
+.chat-theme-banner .chat-theme-tag{font-weight:500;color:var(--muted);font-size:0.85em}
+.chat-layout--theme-speed_date{background:linear-gradient(180deg,rgba(255,196,0,0.08),transparent 140px)}
+.chat-layout--theme-speed_date .chat-theme-banner{background:rgba(255,196,0,0.12)}
+.chat-layout--theme-candlelit_dinner{background:linear-gradient(180deg,rgba(255,110,60,0.1),transparent 160px)}
+.chat-layout--theme-candlelit_dinner .chat-theme-banner{background:rgba(255,110,60,0.14)}
+.chat-layout--theme-deep_talk{background:linear-gradient(180deg,rgba(90,110,255,0.08),transparent 160px)}
+.chat-layout--theme-deep_talk .chat-theme-banner{background:rgba(90,110,255,0.12)}
+.chat-layout--theme-flirty_fun{background:linear-gradient(180deg,rgba(255,80,160,0.1),transparent 150px)}
+.chat-layout--theme-flirty_fun .chat-theme-banner{background:rgba(255,80,160,0.14)}
+.chat-layout--theme-adventure_chat{background:linear-gradient(180deg,rgba(40,180,120,0.09),transparent 150px)}
+.chat-layout--theme-adventure_chat .chat-theme-banner{background:rgba(40,180,120,0.13)}
+.chat-layout--theme-night_owl{background:linear-gradient(180deg,rgba(30,20,70,0.5),transparent 180px)}
+.chat-layout--theme-night_owl .chat-theme-banner{background:rgba(30,20,70,0.6);color:#e8e6ff}
+.chat-layout--theme-weekend_plans{background:linear-gradient(180deg,rgba(0,180,200,0.08),transparent 150px)}
+.chat-layout--theme-weekend_plans .chat-theme-banner{background:rgba(0,180,200,0.12)}
+.chat-layout--theme-blind_video_date{background:linear-gradient(180deg,rgba(150,60,255,0.1),transparent 160px)}
+.chat-layout--theme-blind_video_date .chat-theme-banner{background:rgba(150,60,255,0.14)}
+.chat-layout--theme-podcast_interview{background:linear-gradient(180deg,rgba(255,140,0,0.08),transparent 160px)}
+.chat-layout--theme-podcast_interview .chat-theme-banner{background:rgba(255,140,0,0.13)}
+.chat-layout--theme-dad_joke_duel{background:linear-gradient(180deg,rgba(255,215,0,0.12),transparent 150px)}
+.chat-layout--theme-dad_joke_duel .chat-theme-banner{background:rgba(255,215,0,0.18)}
+.chat-layout--theme-surprise_me .chat-theme-banner{background:rgba(120,120,120,0.1)}
+.icebreaker-chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 10px}
+.icebreaker-chips .chip{cursor:pointer}
+.experience-chat-extras{padding:10px 16px;border-bottom:1px solid var(--line)}

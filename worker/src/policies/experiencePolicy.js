@@ -12,6 +12,8 @@ export const EXPERIENCE_TYPES = Object.freeze([
   { id: "night_owl", label: "Night Owl", icon: "🌃", description: "For the ones still up late.", video: false },
   { id: "weekend_plans", label: "Weekend Plans", icon: "📅", description: "Looking for someone to make weekend plans with.", video: false },
   { id: "blind_video_date", label: "Blind Video Date", icon: "🎭", description: "Video from the first second — no text warmup.", video: true },
+  { id: "podcast_interview", label: "Podcast Interview", icon: "🎙️", description: "A 7-minute video Q&A — one of you interviews, the other spills.", video: true },
+  { id: "dad_joke_duel", label: "Dad Joke Duel", icon: "😂", description: "Trade dad jokes on video — first one to laugh loses.", video: true },
 ]);
 const EXPERIENCE_TYPE_IDS = new Set(EXPERIENCE_TYPES.map(item => item.id));
 export function validExperienceType(value) {
