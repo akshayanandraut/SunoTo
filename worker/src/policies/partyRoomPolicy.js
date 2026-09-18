@@ -41,6 +41,7 @@ export const ROOM_MODES=[
   {id:"scavenger_hunt",name:"Scavenger Hunt"},
   {id:"scene_challenge",name:"Scene Challenge (Improv)"},
   {id:"rap_battle",name:"Rap Battle"},
+  {id:"rps_duel",name:"Rock Paper Scissors"},
 ];
 export const SCENE_CHALLENGE_MAX_SUGGESTION_LENGTH=100;
 export const DRAW_GUESS_CHOOSE_SECONDS=15;
@@ -69,6 +70,8 @@ export const CONNECT_FOUR_COLS=7;
 export const MAFIA_NIGHT_SECONDS=30;
 export const MAFIA_DAY_DISCUSSION_SECONDS=90;
 export const MAFIA_DAY_VOTE_SECONDS=30;
+export const RPS_DUEL_ROUND_SECONDS=10;
+export const RPS_DUEL_WINS_NEEDED=3;
 export const DEFAULT_ROOM_MODE_ID="chat";
 
 export function roomTypeById(id){return ROOM_TYPES.find(type=>type.id===id)||null;}

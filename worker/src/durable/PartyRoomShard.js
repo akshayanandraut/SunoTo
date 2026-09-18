@@ -1,4 +1,4 @@
-import { HOST_INACTIVITY_TIMEOUT_SECONDS, MAX_ROOM_MEMBERS, MAX_VIDEO_PUBLISHERS, DEFAULT_ROOM_MODE_ID, validRoomModeId, DRAW_GUESS_CHOOSE_SECONDS, DRAW_GUESS_ROUND_SECONDS, SNAKE_LADDER_TURN_SECONDS, RUMMY_TURN_SECONDS, LUDO_TURN_SECONDS, TEEN_PATTI_TURN_SECONDS, ANDAR_BAHAR_BETTING_SECONDS, DRAGON_TIGER_BETTING_SECONDS, BIDDING_ROUND_SECONDS, TUG_OF_WAR_QUESTION_SECONDS, TUG_OF_WAR_TARGET_SCORE, ELIMINATION_REFLEX_MIN_PLAYERS, ELIMINATION_REFLEX_MAX_PLAYERS, ELIMINATION_REFLEX_ARM_MIN_MS, ELIMINATION_REFLEX_ARM_MAX_MS, ELIMINATION_REFLEX_TAP_WINDOW_SECONDS, PREDICTION_POOL_ROUND_SECONDS, PREDICTION_POOL_DEFAULT_RANGE_MAX, CHARADES_CHOOSE_SECONDS, CHARADES_ROUND_SECONDS, CONNECT_FOUR_TURN_SECONDS, CONNECT_FOUR_ROWS, CONNECT_FOUR_COLS, MAFIA_NIGHT_SECONDS, MAFIA_DAY_DISCUSSION_SECONDS, MAFIA_DAY_VOTE_SECONDS, SCENE_CHALLENGE_MAX_SUGGESTION_LENGTH } from "../policies/partyRoomPolicy.js";
+import { HOST_INACTIVITY_TIMEOUT_SECONDS, MAX_ROOM_MEMBERS, MAX_VIDEO_PUBLISHERS, DEFAULT_ROOM_MODE_ID, validRoomModeId, DRAW_GUESS_CHOOSE_SECONDS, DRAW_GUESS_ROUND_SECONDS, SNAKE_LADDER_TURN_SECONDS, RUMMY_TURN_SECONDS, LUDO_TURN_SECONDS, TEEN_PATTI_TURN_SECONDS, ANDAR_BAHAR_BETTING_SECONDS, DRAGON_TIGER_BETTING_SECONDS, BIDDING_ROUND_SECONDS, TUG_OF_WAR_QUESTION_SECONDS, TUG_OF_WAR_TARGET_SCORE, ELIMINATION_REFLEX_MIN_PLAYERS, ELIMINATION_REFLEX_MAX_PLAYERS, ELIMINATION_REFLEX_ARM_MIN_MS, ELIMINATION_REFLEX_ARM_MAX_MS, ELIMINATION_REFLEX_TAP_WINDOW_SECONDS, PREDICTION_POOL_ROUND_SECONDS, PREDICTION_POOL_DEFAULT_RANGE_MAX, CHARADES_CHOOSE_SECONDS, CHARADES_ROUND_SECONDS, CONNECT_FOUR_TURN_SECONDS, CONNECT_FOUR_ROWS, CONNECT_FOUR_COLS, MAFIA_NIGHT_SECONDS, MAFIA_DAY_DISCUSSION_SECONDS, MAFIA_DAY_VOTE_SECONDS, SCENE_CHALLENGE_MAX_SUGGESTION_LENGTH, RPS_DUEL_ROUND_SECONDS, RPS_DUEL_WINS_NEEDED } from "../policies/partyRoomPolicy.js";
 import { MAFIA_MIN_PLAYERS, MAFIA_MAX_PLAYERS, MAFIA_ROLES, assignMafiaRoles, resolveMafiaNight, resolveMafiaDayVote, checkMafiaWinner } from "../policies/mafiaEngine.js";
 import { validArenaAvatarState } from "../policies/arenaPolicy.js";
 import { isPremiumAccount as sharedIsPremiumAccount } from "../auth/supabaseUser.js";
@@ -183,7 +183,8 @@ export class PartyRoomShard {
     const scavenger = room.mode === "scavenger_hunt" && room.game ? { status: room.game.status, prompt: room.game.prompt, foundOrder: room.game.foundOrder } : null;
     const scene = room.mode === "scene_challenge" && room.game ? { status: room.game.status, currentScene: room.game.currentScene, currentPrompterId: room.game.currentPrompterId, suggestions: room.game.suggestions, history: room.game.history } : null;
     const rapBattle = room.mode === "rap_battle" && room.game ? this.publicRapBattleState(room) : null;
-    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia, freeze, scavenger, scene, rapBattle, videoPublisherIds: room.videoPublisherIds, videoPublisherLimit: MAX_VIDEO_PUBLISHERS }));
+    const rpsDuel = room.mode === "rps_duel" && room.game ? this.publicRpsState(room) : null;
+    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia, freeze, scavenger, scene, rapBattle, rpsDuel, videoPublisherIds: room.videoPublisherIds, videoPublisherLimit: MAX_VIDEO_PUBLISHERS }));
     if (room.mode === "mafia" && room.game?.roles?.[participantId] && room.game.alive.includes(participantId)) {
       const role = room.game.roles[participantId];
       const mafiaIds = Object.entries(room.game.roles).filter(([, r]) => r === MAFIA_ROLES.MAFIA).map(([id]) => id);
@@ -321,6 +322,10 @@ export class PartyRoomShard {
         }
         if (room.mode === "connect_four" && room.game.status === "playing") {
           this.broadcast(event("MESSAGE_REJECTED", { code: "connect_four_round_in_progress" }));
+          return;
+        }
+        if (room.mode === "rps_duel" && room.game.status === "playing") {
+          this.broadcast(event("MESSAGE_REJECTED", { code: "rps_duel_round_in_progress" }));
           return;
         }
         if (room.mode === "mafia" && ["night", "day_discussion", "day_vote"].includes(room.game.status)) {
@@ -958,6 +963,39 @@ export class PartyRoomShard {
       await this.state.storage.put("room", room);
       this.broadcastConnectFourState(room);
       await this.scheduleAlarm(room);
+      return;
+    }
+
+    if (type === "RPS_START" && attachment.isHost) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "rps_duel") return;
+      if (room.game && room.game.status === "playing") return;
+      if (room.seatedParticipantIds.length !== 2) { socket.send(event("MESSAGE_REJECTED", { code: "rps_duel_needs_two_players" })); return; }
+      const players = [...room.seatedParticipantIds];
+      room.game = {
+        status: "playing", players, scores: Object.fromEntries(players.map(id => [id, 0])),
+        picks: {}, lastPicks: {}, lastRoundWinner: null, roundNumber: 1,
+        phaseEndsAt: Date.now() + RPS_DUEL_ROUND_SECONDS * 1000, winnerParticipantId: null,
+      };
+      await this.state.storage.put("room", room);
+      this.broadcastRpsState(room);
+      await this.scheduleAlarm(room);
+      return;
+    }
+
+    if (type === "RPS_PICK" && ["rock", "paper", "scissors"].includes(payload.choice)) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "rps_duel" || !room.game || room.game.status !== "playing") return;
+      const participantId = attachment.participantId;
+      if (!room.game.players.includes(participantId)) return;
+      if (room.game.picks[participantId]) return;
+      room.game.picks[participantId] = payload.choice;
+      if (Object.keys(room.game.picks).length >= room.game.players.length) {
+        await this.resolveRpsRound(room);
+      } else {
+        await this.state.storage.put("room", room);
+        this.broadcastRpsState(room);
+      }
       return;
     }
 
@@ -2467,6 +2505,79 @@ export class PartyRoomShard {
     await this.resolveConnectFourGame(room, winnerParticipantId, null);
   }
 
+  rpsBeats(a, b) {
+    return (a === "rock" && b === "scissors") || (a === "scissors" && b === "paper") || (a === "paper" && b === "rock");
+  }
+
+  rpsAutoPick(room, participantId) {
+    if (room.game.lastPicks[participantId]) return room.game.lastPicks[participantId];
+    const choices = ["rock", "paper", "scissors"];
+    return choices[Math.floor(Math.random() * choices.length)];
+  }
+
+  publicRpsState(room) {
+    const game = room.game;
+    return {
+      status: game.status, players: game.players, scores: game.scores, roundNumber: game.roundNumber,
+      phaseEndsAt: game.phaseEndsAt, picked: game.players.filter(id => game.picks[id]),
+      lastPicks: game.lastPicks || {}, lastRoundWinner: game.lastRoundWinner || null, lastRoundTie: Boolean(game.lastRoundTie),
+      winnerParticipantId: game.winnerParticipantId || null, winsNeeded: RPS_DUEL_WINS_NEEDED,
+    };
+  }
+
+  broadcastRpsState(room) {
+    this.broadcast(event("RPS_STATE", this.publicRpsState(room)));
+  }
+
+  async resolveRpsRound(room) {
+    for (const participantId of room.game.players) {
+      if (!room.game.picks[participantId]) room.game.picks[participantId] = this.rpsAutoPick(room, participantId);
+    }
+    const [p1, p2] = room.game.players;
+    const pick1 = room.game.picks[p1], pick2 = room.game.picks[p2];
+    room.game.lastPicks = { [p1]: pick1, [p2]: pick2 };
+    room.game.lastRoundResolvedAt = Date.now();
+    let roundWinner = null;
+    if (pick1 === pick2) {
+      room.game.lastRoundTie = true;
+      room.game.lastRoundWinner = null;
+    } else {
+      room.game.lastRoundTie = false;
+      roundWinner = this.rpsBeats(pick1, pick2) ? p1 : p2;
+      room.game.lastRoundWinner = roundWinner;
+      room.game.scores[roundWinner] += 1;
+    }
+    room.game.picks = {};
+    if (roundWinner && room.game.scores[roundWinner] >= RPS_DUEL_WINS_NEEDED) {
+      room.game.status = "game_over";
+      room.game.winnerParticipantId = roundWinner;
+      room.game.phaseEndsAt = null;
+      await this.state.storage.put("room", room);
+      this.broadcastRpsState(room);
+      this.broadcast(event("RPS_OVER", { winnerParticipantId: roundWinner, scores: room.game.scores }));
+      return;
+    }
+    room.game.roundNumber += 1;
+    room.game.phaseEndsAt = Date.now() + RPS_DUEL_ROUND_SECONDS * 1000;
+    await this.state.storage.put("room", room);
+    this.broadcastRpsState(room);
+    await this.scheduleAlarm(room);
+  }
+
+  async handleRpsDisconnect(participantId) {
+    const room = (await this.state.storage.get("room")) || {};
+    if (room.mode !== "rps_duel" || !room.game || room.game.status !== "playing") return;
+    if (!room.game.players.includes(participantId)) return;
+    const [p1, p2] = room.game.players;
+    const winnerParticipantId = participantId === p1 ? p2 : p1;
+    room.game.status = "game_over";
+    room.game.winnerParticipantId = winnerParticipantId;
+    room.game.phaseEndsAt = null;
+    await this.state.storage.put("room", room);
+    this.broadcastRpsState(room);
+    this.broadcast(event("RPS_OVER", { winnerParticipantId, scores: room.game.scores, reason: "opponent_forfeit" }));
+  }
+
   publicEliminationReflexState(room, participantId) {
     const game = room.game;
     return {
@@ -2679,6 +2790,7 @@ export class PartyRoomShard {
     await this.handleLudoDisconnect(attachment.participantId);
     await this.handleTeenPattiDisconnect(attachment.participantId);
     await this.handleConnectFourDisconnect(attachment.participantId);
+    await this.handleRpsDisconnect(attachment.participantId);
     await this.handleMafiaDisconnect(attachment.participantId);
     await this.handleFreezeDisconnect(attachment.participantId);
     const roomForVideo = (await this.state.storage.get("room")) || {};
@@ -2811,6 +2923,8 @@ export class PartyRoomShard {
         await this.resolveTugOfWarQuestion(room);
       } else if (room.mode === "connect_four" && room.game.status === "playing") {
         await this.resolveConnectFourTimeout(room);
+      } else if (room.mode === "rps_duel" && room.game.status === "playing") {
+        await this.resolveRpsRound(room);
       } else if (room.mode === "elimination_reflex" && room.game.status === "waiting_round") {
         room.game.status = "armed";
         room.game.phaseEndsAt = Date.now() + ELIMINATION_REFLEX_TAP_WINDOW_SECONDS * 1000;

@@ -652,6 +652,30 @@ const connectFourPanel=(state,isHost)=>{
   return `<div id="connect-four-panel" class="no-copy-zone game-panel"><div class="field">${header}</div>${board}${banner}</div>`;
 };
 
+const rpsPanel=(state,isHost)=>{
+  const game=state.partyRps||{status:"idle"};
+  const status=game.status||"idle";
+  const myId=state.partyParticipantId;
+  const remaining=game.phaseEndsAt?Math.max(0,Math.round((game.phaseEndsAt-Date.now())/1000)):0;
+  const opponentId=(game.players||[]).find(id=>id!==myId);
+  const scores=game.scores||{};
+  const CHOICES=[["rock","🪨 Rock"],["paper","📄 Paper"],["scissors","✂️ Scissors"]];
+  if(status!=="playing"&&status!=="game_over"){
+    return `<div id="rps-panel" class="no-copy-zone game-panel"><p class="eyebrow">🪨📄✂️ Rock Paper Scissors</p><p class="muted">${isHost?"Start a duel — needs exactly 2 seated players. First to 3 round wins takes the match.":"Waiting for the host to start a round."}</p>${isHost?`<button class="btn btn-primary" id="rps-start-btn" type="button">Start Duel</button>`:""}</div>`;
+  }
+  const scoreLine=`<p>You: <strong>${scores[myId]||0}</strong> &nbsp; Opponent: <strong>${scores[opponentId]||0}</strong> &nbsp; (first to ${game.winsNeeded||3})</p>`;
+  if(status==="game_over"){
+    const banner=game.winnerParticipantId===myId?`<p><strong>You win the duel! 🏆</strong></p>`:`<p><strong>${escapeText(peerHandle(game.winnerParticipantId))} wins the duel.</strong></p>`;
+    return `<div id="rps-panel" class="no-copy-zone game-panel"><p class="eyebrow">🪨📄✂️ Rock Paper Scissors</p>${scoreLine}${banner}${isHost?`<button class="btn btn-primary" id="rps-start-btn" type="button">Play again</button>`:""}</div>`;
+  }
+  const iPicked=(game.picked||[]).includes(myId);
+  const opponentPicked=(game.picked||[]).includes(opponentId);
+  const lastPicks=game.lastPicks||{};
+  const resultBanner=lastPicks[myId]&&lastPicks[opponentId]?`<p class="muted">Last round — you: ${CHOICES.find(([id])=>id===lastPicks[myId])?.[1]||""}, opponent: ${CHOICES.find(([id])=>id===lastPicks[opponentId])?.[1]||""} — ${game.lastRoundTie?"Tie — replay this round":(game.lastRoundWinner===myId?"you won that round":"opponent won that round")}</p>`:"";
+  const pickForm=iPicked?`<p class="muted">Pick locked in — waiting on opponent…</p>`:`<div class="inline-form" style="flex-wrap:wrap">${CHOICES.map(([id,label])=>`<button class="btn btn-ghost" data-rps-choice="${id}" type="button">${label}</button>`).join("")}</div>`;
+  return `<div id="rps-panel" class="no-copy-zone game-panel"><p class="eyebrow">🪨📄✂️ Round ${game.roundNumber||1} · <span id="rps-timer">${remaining}s left</span></p>${scoreLine}${resultBanner}<div style="margin-top:10px">${pickForm}</div><p class="muted" style="margin-top:6px">You: ${iPicked?"✅ picked":"—"} &nbsp; Opponent: ${opponentPicked?"✅ picked":"—"}</p></div>`;
+};
+
 const eliminationReflexPanel=(state,isHost)=>{
   const game=state.partyEliminationReflex||{status:"idle"};
   const status=game.status||"idle";
@@ -746,7 +770,7 @@ export const views = {
       const videoGrid=isVideo?`<div class="video-panel" id="party-video-grid">${(state.partyVideoParticipants||[]).length?"":'<p class="video-connecting">Waiting for others to join with video…</p>'}<video id="party-video-local" autoplay playsinline muted></video>${(state.partyVideoParticipants||[]).map(id=>`<video data-party-video="${escapeText(id)}" autoplay playsinline></video>`).join("")}${state.partyLocalVideoOn?`<button class="btn btn-ghost" id="party-video-mute-toggle" type="button" aria-label="Mute microphone" aria-pressed="false">🎤</button><button class="btn btn-ghost" id="party-video-camera-toggle" type="button" aria-label="Turn off camera" aria-pressed="false">📷</button>`:""}</div><p class="muted" style="margin-top:6px">${videoPublisherIds.length}/${videoPublisherLimit} cameras in use — the rest of the room can still watch and chat.</p><button class="btn btn-ghost" id="party-start-video" type="button" ${videoAtCap?"disabled":""}>${state.partyLocalVideoOn?"Video on":videoAtCap?"Video full":"Turn on camera & mic"}</button><button class="btn btn-ghost" id="party-video-record-toggle" type="button" aria-label="Record or stream this room">🎬</button>`:"";
       const availableModes=state.featureFlags?.arena_enabled===false?ROOM_MODES.filter(item=>item.id!=="arena"):ROOM_MODES;
       const modeSwitcher=isHost?`<form id="party-mode-form" class="inline-form"><select name="mode">${availableModes.map(item=>`<option value="${item.id}" ${item.id===mode?"selected":""}>${escapeText(item.name)}</option>`).join("")}</select><button class="btn btn-ghost">Switch mode</button></form>`:`<p class="muted">Mode: ${escapeText(ROOM_MODES.find(item=>item.id===mode)?.name||mode)}</p>`;
-      const modePanel=mode==="game"?drawGuessPanel(state,isHost):mode==="snake_ladder"?snakeLadderPanel(state,isHost):mode==="rummy"?rummyPanel(state,isHost):mode==="ludo"?ludoPanel(state,isHost):mode==="teen_patti"?teenPattiPanel(state,isHost):mode==="andar_bahar"?andarBaharPanel(state,isHost):mode==="dragon_tiger"?dragonTigerPanel(state,isHost):mode==="bidding"?biddingPanel(state,isHost):mode==="tug_of_war"?tugOfWarPanel(state,isHost):mode==="elimination_reflex"?eliminationReflexPanel(state,isHost):mode==="prediction_pool"?predictionPoolPanel(state,isHost):mode==="charades"?charadesPanel(state,isHost):mode==="connect_four"?connectFourPanel(state,isHost):mode==="arena"?arenaPanel(state):mode==="mafia"?mafiaPanel(state,isHost):mode==="standup"?standupPanel(state,isHost):mode==="freeze_challenge"?freezeChallengePanel(state,isHost):mode==="scavenger_hunt"?scavengerHuntPanel(state,isHost):mode==="scene_challenge"?sceneChallengePanel(state,isHost):mode==="rap_battle"?rapBattlePanel(state,isHost):"";
+      const modePanel=mode==="game"?drawGuessPanel(state,isHost):mode==="snake_ladder"?snakeLadderPanel(state,isHost):mode==="rummy"?rummyPanel(state,isHost):mode==="ludo"?ludoPanel(state,isHost):mode==="teen_patti"?teenPattiPanel(state,isHost):mode==="andar_bahar"?andarBaharPanel(state,isHost):mode==="dragon_tiger"?dragonTigerPanel(state,isHost):mode==="bidding"?biddingPanel(state,isHost):mode==="tug_of_war"?tugOfWarPanel(state,isHost):mode==="elimination_reflex"?eliminationReflexPanel(state,isHost):mode==="prediction_pool"?predictionPoolPanel(state,isHost):mode==="charades"?charadesPanel(state,isHost):mode==="connect_four"?connectFourPanel(state,isHost):mode==="arena"?arenaPanel(state):mode==="mafia"?mafiaPanel(state,isHost):mode==="standup"?standupPanel(state,isHost):mode==="freeze_challenge"?freezeChallengePanel(state,isHost):mode==="scavenger_hunt"?scavengerHuntPanel(state,isHost):mode==="scene_challenge"?sceneChallengePanel(state,isHost):mode==="rap_battle"?rapBattlePanel(state,isHost):mode==="rps_duel"?rpsPanel(state,isHost):"";
       const isRadio=room.roomType==="radio",track=state.partyCurrentTrack,votes=state.partyRadioVotes||{skipVotes:0,replayVotes:0,totalMembers:1};
       const queueTracks=state.partyQueueTracks||[];
       const queueSidebar=isRadio&&isMusic&&queueTracks.length?`<div class="saved-list" id="party-radio-queue" style="margin-top:14px"><p class="eyebrow">Playlist</p>${queueTracks.map(item=>`<article class="saved-item"><div>${item.status==="playing"?"▶ ":""}${escapeText(item.title)}${item.artistName?` <span class="muted">— ${escapeText(item.artistName)}</span>`:""}${item.listenerMessage?`<p class="muted" style="margin:2px 0 0">💬 ${escapeText(item.listenerMessage)}</p>`:""}</div></article>`).join("")}</div>`:"";
