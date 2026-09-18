@@ -1,4 +1,4 @@
-import { HOST_INACTIVITY_TIMEOUT_SECONDS, MAX_ROOM_MEMBERS, MAX_VIDEO_PUBLISHERS, DEFAULT_ROOM_MODE_ID, validRoomModeId, DRAW_GUESS_CHOOSE_SECONDS, DRAW_GUESS_ROUND_SECONDS, SNAKE_LADDER_TURN_SECONDS, RUMMY_TURN_SECONDS, LUDO_TURN_SECONDS, TEEN_PATTI_TURN_SECONDS, ANDAR_BAHAR_BETTING_SECONDS, DRAGON_TIGER_BETTING_SECONDS, BIDDING_ROUND_SECONDS, TUG_OF_WAR_QUESTION_SECONDS, TUG_OF_WAR_TARGET_SCORE, ELIMINATION_REFLEX_MIN_PLAYERS, ELIMINATION_REFLEX_MAX_PLAYERS, ELIMINATION_REFLEX_ARM_MIN_MS, ELIMINATION_REFLEX_ARM_MAX_MS, ELIMINATION_REFLEX_TAP_WINDOW_SECONDS, PREDICTION_POOL_ROUND_SECONDS, PREDICTION_POOL_DEFAULT_RANGE_MAX, CHARADES_CHOOSE_SECONDS, CHARADES_ROUND_SECONDS, CONNECT_FOUR_TURN_SECONDS, CONNECT_FOUR_ROWS, CONNECT_FOUR_COLS, MAFIA_NIGHT_SECONDS, MAFIA_DAY_DISCUSSION_SECONDS, MAFIA_DAY_VOTE_SECONDS } from "../policies/partyRoomPolicy.js";
+import { HOST_INACTIVITY_TIMEOUT_SECONDS, MAX_ROOM_MEMBERS, MAX_VIDEO_PUBLISHERS, DEFAULT_ROOM_MODE_ID, validRoomModeId, DRAW_GUESS_CHOOSE_SECONDS, DRAW_GUESS_ROUND_SECONDS, SNAKE_LADDER_TURN_SECONDS, RUMMY_TURN_SECONDS, LUDO_TURN_SECONDS, TEEN_PATTI_TURN_SECONDS, ANDAR_BAHAR_BETTING_SECONDS, DRAGON_TIGER_BETTING_SECONDS, BIDDING_ROUND_SECONDS, TUG_OF_WAR_QUESTION_SECONDS, TUG_OF_WAR_TARGET_SCORE, ELIMINATION_REFLEX_MIN_PLAYERS, ELIMINATION_REFLEX_MAX_PLAYERS, ELIMINATION_REFLEX_ARM_MIN_MS, ELIMINATION_REFLEX_ARM_MAX_MS, ELIMINATION_REFLEX_TAP_WINDOW_SECONDS, PREDICTION_POOL_ROUND_SECONDS, PREDICTION_POOL_DEFAULT_RANGE_MAX, CHARADES_CHOOSE_SECONDS, CHARADES_ROUND_SECONDS, CONNECT_FOUR_TURN_SECONDS, CONNECT_FOUR_ROWS, CONNECT_FOUR_COLS, MAFIA_NIGHT_SECONDS, MAFIA_DAY_DISCUSSION_SECONDS, MAFIA_DAY_VOTE_SECONDS, SCENE_CHALLENGE_MAX_SUGGESTION_LENGTH } from "../policies/partyRoomPolicy.js";
 import { MAFIA_MIN_PLAYERS, MAFIA_MAX_PLAYERS, MAFIA_ROLES, assignMafiaRoles, resolveMafiaNight, resolveMafiaDayVote, checkMafiaWinner } from "../policies/mafiaEngine.js";
 import { validArenaAvatarState } from "../policies/arenaPolicy.js";
 import { isPremiumAccount as sharedIsPremiumAccount } from "../auth/supabaseUser.js";
@@ -181,7 +181,8 @@ export class PartyRoomShard {
     const mafia = room.mode === "mafia" && room.game ? this.publicMafiaState(room) : null;
     const freeze = room.mode === "freeze_challenge" && room.game ? { status: room.game.status, challenge: room.game.challenge, alive: room.game.alive, out: room.game.out, winnerParticipantId: room.game.winnerParticipantId } : null;
     const scavenger = room.mode === "scavenger_hunt" && room.game ? { status: room.game.status, prompt: room.game.prompt, foundOrder: room.game.foundOrder } : null;
-    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia, freeze, scavenger, videoPublisherIds: room.videoPublisherIds, videoPublisherLimit: MAX_VIDEO_PUBLISHERS }));
+    const scene = room.mode === "scene_challenge" && room.game ? { status: room.game.status, currentScene: room.game.currentScene, currentPrompterId: room.game.currentPrompterId, suggestions: room.game.suggestions, history: room.game.history } : null;
+    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia, freeze, scavenger, scene, videoPublisherIds: room.videoPublisherIds, videoPublisherLimit: MAX_VIDEO_PUBLISHERS }));
     if (room.mode === "mafia" && room.game?.roles?.[participantId] && room.game.alive.includes(participantId)) {
       const role = room.game.roles[participantId];
       const mafiaIds = Object.entries(room.game.roles).filter(([, r]) => r === MAFIA_ROLES.MAFIA).map(([id]) => id);
@@ -1341,10 +1342,55 @@ export class PartyRoomShard {
       return;
     }
 
+    // Scene Challenge: the audience throws out scene ideas, the host performs whichever one gets
+    // picked -- random pick keeps it "completely random, unpredictable" per the ask, manual pick lets
+    // the host run it as a directed improv game instead. Either way it's the host's call which mode.
+    if (type === "SCENE_SUGGEST" && attachment.seated && !attachment.isHost && typeof payload.text === "string" && payload.text.trim() && payload.text.length <= SCENE_CHALLENGE_MAX_SUGGESTION_LENGTH) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "scene_challenge") return;
+      room.game ??= { status: "waiting", currentScene: null, currentPrompterId: null, suggestions: [], history: [] };
+      if (room.game.status !== "waiting") return;
+      const myId = attachment.participantId;
+      room.game.suggestions = room.game.suggestions.filter(entry => entry.participantId !== myId);
+      room.game.suggestions.push({ participantId: myId, text: payload.text.trim() });
+      await this.state.storage.put("room", room);
+      this.broadcastSceneState(room);
+      return;
+    }
+
+    if ((type === "SCENE_PICK_RANDOM" || type === "SCENE_PICK") && attachment.isHost) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "scene_challenge" || !room.game || room.game.status !== "waiting") return;
+      if (!room.game.suggestions.length) { socket.send(event("MESSAGE_REJECTED", { code: "scene_no_suggestions" })); return; }
+      const chosen = type === "SCENE_PICK_RANDOM"
+        ? room.game.suggestions[Math.floor(Math.random() * room.game.suggestions.length)]
+        : room.game.suggestions.find(entry => entry.participantId === payload.participantId);
+      if (!chosen) return;
+      room.game.status = "active";
+      room.game.currentScene = chosen.text;
+      room.game.currentPrompterId = chosen.participantId;
+      room.game.suggestions = [];
+      await this.state.storage.put("room", room);
+      this.broadcastSceneState(room);
+      return;
+    }
+
+    if (type === "SCENE_DONE" && attachment.isHost) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "scene_challenge" || !room.game || room.game.status !== "active") return;
+      room.game.history.push({ text: room.game.currentScene, by: room.game.currentPrompterId });
+      room.game.status = "waiting";
+      room.game.currentScene = null;
+      room.game.currentPrompterId = null;
+      await this.state.storage.put("room", room);
+      this.broadcastSceneState(room);
+      return;
+    }
+
     if (type === "VIDEO_START" && attachment.seated) {
       const room = (await this.state.storage.get("room")) || {};
       room.videoPublisherIds ??= [];
-      if (room.mode === "standup" && !attachment.isHost) {
+      if ((room.mode === "standup" || room.mode === "scene_challenge") && !attachment.isHost) {
         socket.send(event("MESSAGE_REJECTED", { code: "standup_performer_only" }));
         return;
       }
@@ -1438,6 +1484,11 @@ export class PartyRoomShard {
   broadcastScavengerState(room) {
     const game = room.game;
     this.broadcast(event("SCAVENGER_STATE", { status: game.status, prompt: game.prompt, foundOrder: game.foundOrder }));
+  }
+
+  broadcastSceneState(room) {
+    const game = room.game;
+    this.broadcast(event("SCENE_STATE", { status: game.status, currentScene: game.currentScene, currentPrompterId: game.currentPrompterId, suggestions: game.suggestions, history: game.history }));
   }
 
   async maybeResolveMafiaNight(room) {
