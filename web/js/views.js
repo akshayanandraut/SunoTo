@@ -356,7 +356,7 @@ const standupPanel=(state,isHost)=>{
   return `<div id="standup-panel" class="no-copy-zone game-panel"><p class="eyebrow">🎙️ Open Mic</p>${status}<div id="standup-reactions" style="position:relative;height:0"></div><div class="inline-form" style="margin-top:6px">${reactions.map(([id,emoji])=>`<button class="btn btn-ghost" data-radio-reaction="${id}" type="button">${emoji}</button>`).join("")}</div></div>`;
 };
 
-const FREEZE_CHALLENGES=[["statue","🗿 Statue — first to move loses"],["staring","👀 Staring Contest — first to blink loses"],["laugh","😂 First to Laugh loses"],["steady_finger","☝️ Steady Finger — touch a desk, first to lift it loses"]];
+const FREEZE_CHALLENGES=[["statue","🗿 Statue — first to move loses"],["staring","👀 Staring Contest — first to blink loses"],["laugh","😂 First to Laugh loses"],["steady_finger","☝️ Steady Finger — touch a desk, first to lift it loses"],["sleep","😴 Last One Awake — first to doze off loses"],["logout","🚪 Last One Standing — first to leave the room loses, auto-detected"]];
 const freezeChallengePanel=(state,isHost)=>{
   const game=state.partyFreeze||{status:"idle"};
   const myId=state.partyParticipantId;
@@ -366,7 +366,7 @@ const freezeChallengePanel=(state,isHost)=>{
   }
   const challengeLabel=FREEZE_CHALLENGES.find(([id])=>id===game.challenge)?.[1]||"";
   const rows=alive.map(id=>`<div>${id===myId?"You":escapeText(peerHandle(id))} — still in</div>`).join("")+out.slice().reverse().map(id=>`<div class="muted">${id===myId?"You":escapeText(peerHandle(id))} — out</div>`).join("");
-  const finished=game.status==="finished"?`<p><strong>${game.winnerParticipantId?(game.winnerParticipantId===myId?"You win! 🏆":`${escapeText(peerHandle(game.winnerParticipantId))} wins! 🏆`):"No winner — everyone's out."}</strong></p>${isHost?`<form id="freeze-start-form" class="inline-form" style="flex-wrap:wrap">${FREEZE_CHALLENGES.map(([id,label])=>`<button class="btn btn-ghost" data-freeze-start="${id}" type="button">${label}</button>`).join("")}</form>`:""}`:(alive.includes(myId)?`<button class="btn btn-primary" id="freeze-out-btn" type="button">I'm out</button>`:`<p class="muted">You're out — watch the rest play.</p>`);
+  const finished=game.status==="finished"?`<p><strong>${game.winnerParticipantId?(game.winnerParticipantId===myId?"You win! 🏆":`${escapeText(peerHandle(game.winnerParticipantId))} wins! 🏆`):"No winner — everyone's out."}</strong></p>${isHost?`<form id="freeze-start-form" class="inline-form" style="flex-wrap:wrap">${FREEZE_CHALLENGES.map(([id,label])=>`<button class="btn btn-ghost" data-freeze-start="${id}" type="button">${label}</button>`).join("")}</form>`:""}`:(game.challenge==="logout"?`<p class="muted">Auto-detected — you're eliminated the moment you leave this room.</p>`:(alive.includes(myId)?`<button class="btn btn-primary" id="freeze-out-btn" type="button">I'm out</button>`:`<p class="muted">You're out — watch the rest play.</p>`));
   return `<div id="freeze-panel" class="no-copy-zone game-panel"><p class="eyebrow">🧊 ${challengeLabel}</p>${finished}<div class="saved-list" style="margin-top:10px">${rows}</div></div>`;
 };
 

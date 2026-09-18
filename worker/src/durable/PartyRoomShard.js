@@ -1282,7 +1282,7 @@ export class PartyRoomShard {
     // Freeze Challenge covers Statue, Staring Contest, First to Laugh and Steady Finger -- all are
     // the same self-report elimination mechanic in real life (no camera-based motion/blink/laughter
     // detection here), so one game state machine serves every "challenge" label.
-    if (type === "FREEZE_START" && attachment.isHost && ["statue", "staring", "laugh", "steady_finger"].includes(payload.challenge)) {
+    if (type === "FREEZE_START" && attachment.isHost && ["statue", "staring", "laugh", "steady_finger", "sleep", "logout"].includes(payload.challenge)) {
       const room = (await this.state.storage.get("room")) || {};
       if (room.mode !== "freeze_challenge") return;
       const bySocket = new Map(this.state.getWebSockets().map(s => [(s.deserializeAttachment() || {}).participantId, s.deserializeAttachment() || {}]));
@@ -1417,6 +1417,22 @@ export class PartyRoomShard {
   broadcastFreezeState(room) {
     const game = room.game;
     this.broadcast(event("FREEZE_STATE", { status: game.status, challenge: game.challenge, alive: game.alive, out: game.out, winnerParticipantId: game.winnerParticipantId }));
+  }
+
+  // "Last One Standing" is the one Freeze Challenge that's genuinely server-verifiable: a closed
+  // socket means that player left first, no self-report needed.
+  async handleFreezeDisconnect(participantId) {
+    const room = (await this.state.storage.get("room")) || {};
+    if (room.mode !== "freeze_challenge" || room.game?.challenge !== "logout" || room.game.status !== "active") return;
+    if (!room.game.alive.includes(participantId)) return;
+    room.game.alive = room.game.alive.filter(id => id !== participantId);
+    room.game.out.push(participantId);
+    if (room.game.alive.length <= 1) {
+      room.game.status = "finished";
+      room.game.winnerParticipantId = room.game.alive[0] || null;
+    }
+    await this.state.storage.put("room", room);
+    this.broadcastFreezeState(room);
   }
 
   broadcastScavengerState(room) {
@@ -2543,6 +2559,7 @@ export class PartyRoomShard {
     await this.handleTeenPattiDisconnect(attachment.participantId);
     await this.handleConnectFourDisconnect(attachment.participantId);
     await this.handleMafiaDisconnect(attachment.participantId);
+    await this.handleFreezeDisconnect(attachment.participantId);
     const roomForVideo = (await this.state.storage.get("room")) || {};
     if ((roomForVideo.videoPublisherIds || []).includes(attachment.participantId)) {
       roomForVideo.videoPublisherIds = roomForVideo.videoPublisherIds.filter(id => id !== attachment.participantId);

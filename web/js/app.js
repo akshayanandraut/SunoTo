@@ -411,11 +411,14 @@ const EXPERIENCE_CHAT_THEME={
   dad_joke_duel:{tagline:"First one to laugh loses.",icebreakers:[]},
   statue_duel:{tagline:"First one to move loses.",icebreakers:[]},
   staring_contest:{tagline:"First one to blink loses.",icebreakers:[]},
+  sleep_duel:{tagline:"First one to doze off loses.",icebreakers:[]},
+  logout_duel:{tagline:"First one to leave loses — automatically, no honor system needed.",icebreakers:["What's keeping you up?","Bet you log off first 😏"]},
 };
 const DUEL_LOSS_BUTTON={
   dad_joke_duel:{signal:"laughed",hint:"Trade dad jokes on video — first one to laugh taps the button below and loses!",label:"😂 I laughed — I lose"},
   statue_duel:{signal:"moved",hint:"Freeze on video — first one to move taps the button below and loses!",label:"🏃 I moved — I lose"},
   staring_contest:{signal:"blinked",hint:"Lock eyes on video — first one to blink taps the button below and loses!",label:"😉 I blinked — I lose"},
+  sleep_duel:{signal:"dozed_off",hint:"Stay up together on video — first one to doze off taps the button below and loses!",label:"😴 I dozed off — I lose"},
 };
 function mountExperienceTheme(){const type=state.match?.experienceType;const layout=document.querySelector(".chat-layout");if(!layout)return;layout.className=layout.className.replace(/\schat-layout--theme-\S+/g,"");if(!type)return;layout.classList.add(`chat-layout--theme-${type}`);if(!document.querySelector("#chat-theme-banner")){const meta=EXPERIENCE_TYPES.find(item=>item.id===type),theme=EXPERIENCE_CHAT_THEME[type];const banner=document.createElement("div");banner.id="chat-theme-banner";banner.className="chat-theme-banner";const icon=document.createElement("span");icon.className="chat-theme-icon";icon.textContent=meta?.icon||"✨";const text=document.createElement("span");text.textContent=meta?.label||"Surprise Match";const tag=document.createElement("span");tag.className="chat-theme-tag";tag.textContent=theme?.tagline||"";banner.append(icon,text,tag);layout.prepend(banner);}}
 function mountExperienceChatExtras(){const type=state.match?.experienceType;mountExperienceTheme();if(!type||routeName()!=="chat"||document.querySelector("#experience-chat-extras"))return;const anchor=document.querySelector("#chat-actions")||document.querySelector("#chat-form");if(!anchor)return;const panel=document.createElement("div");panel.id="experience-chat-extras";panel.className="experience-chat-extras";

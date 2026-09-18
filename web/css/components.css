@@ -59,3 +59,7 @@
 .chat-layout--theme-statue_duel .chat-theme-banner{background:rgba(140,140,140,0.2)}
 .chat-layout--theme-staring_contest{background:linear-gradient(180deg,rgba(0,140,180,0.1),transparent 150px)}
 .chat-layout--theme-staring_contest .chat-theme-banner{background:rgba(0,140,180,0.15)}
+.chat-layout--theme-sleep_duel{background:linear-gradient(180deg,rgba(60,40,120,0.12),transparent 150px)}
+.chat-layout--theme-sleep_duel .chat-theme-banner{background:rgba(60,40,120,0.18);color:#ece8ff}
+.chat-layout--theme-logout_duel{background:linear-gradient(180deg,rgba(200,60,60,0.09),transparent 150px)}
+.chat-layout--theme-logout_duel .chat-theme-banner{background:rgba(200,60,60,0.14)}
