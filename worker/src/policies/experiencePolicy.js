@@ -19,6 +19,8 @@ export const EXPERIENCE_TYPES = Object.freeze([
   { id: "sleep_duel", label: "Sleep Duel", icon: "😴", description: "Stay up together on video — first one to doze off loses.", video: true },
   { id: "logout_duel", label: "Logout Duel", icon: "🚪", description: "Last one still connected wins — whoever closes the chat first loses.", video: false },
   { id: "roleplay", label: "Roleplay", icon: "🎭", description: "You'll each be given a random role — play it out and see where it goes.", video: false },
+  { id: "guess_duel", label: "Guess Duel", icon: "❓", description: "You'll each get a secret word — ask questions, then risk a guess every 10 seconds. First to nail the other's word wins.", video: false },
+  { id: "charades_duel", label: "Dumb Charades", icon: "🎬", description: "One of you gets a secret word to act out on video, no talking. The other guesses, one try every 10 seconds.", video: true },
 ]);
 export const DUEL_EXPERIENCE_TYPES = Object.freeze(["dad_joke_duel", "statue_duel", "staring_contest", "sleep_duel"]);
 
@@ -49,6 +51,34 @@ export const ROLEPLAY_PAIRS = Object.freeze([
 ]);
 export function randomRoleplayPair(random = Math.random) {
   return ROLEPLAY_PAIRS[Math.floor(random() * ROLEPLAY_PAIRS.length)];
+}
+
+// Deliberately a flat mix of people, events and objects (per the ask: "guess the event, guess the
+// person -- have some sense of relevance but keep it interesting"), not paired like ROLEPLAY_PAIRS,
+// since each player's word is independent here rather than part of a matched scenario.
+export const GUESS_DUEL_WORDS = Object.freeze([
+  "Albert Einstein", "Cleopatra", "Sherlock Holmes", "Dracula", "Napoleon", "Batman",
+  "The Moon Landing", "The Olympics", "Halloween", "New Year's Eve", "Diwali", "World Cup Final",
+  "A Toothbrush", "A Refrigerator", "A Guitar", "A Bicycle", "A Coffee Mug", "A Rubik's Cube",
+  "The Great Wall of China", "Shakespeare",
+]);
+export function randomGuessDuelWords(random = Math.random) {
+  const a = GUESS_DUEL_WORDS[Math.floor(random() * GUESS_DUEL_WORDS.length)];
+  let b = a;
+  while (b === a) b = GUESS_DUEL_WORDS[Math.floor(random() * GUESS_DUEL_WORDS.length)];
+  return [a, b];
+}
+
+// Classic dumb-charades prompts: mimeable actions/things rather than abstract nouns, since the
+// performer can't talk and has to physically act it out.
+export const CHARADES_WORDS = Object.freeze([
+  "Riding a bicycle", "Brushing teeth", "Titanic", "Superman", "Cooking pasta", "Playing guitar",
+  "Swimming underwater", "Elephant", "Robot", "Sleeping", "Fishing", "Basketball", "Yoga pose",
+  "Vampire", "Snake charmer", "Ice skating", "Boxing match", "Cutting a cake", "Taking a selfie",
+  "Skydiving",
+]);
+export function randomCharadesWord(random = Math.random) {
+  return CHARADES_WORDS[Math.floor(random() * CHARADES_WORDS.length)];
 }
 const EXPERIENCE_TYPE_IDS = new Set(EXPERIENCE_TYPES.map(item => item.id));
 export function validExperienceType(value) {

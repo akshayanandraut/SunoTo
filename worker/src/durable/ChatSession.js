@@ -10,7 +10,7 @@ import { AnalyticsService } from "../services/AnalyticsService.js";
 import { ConfigService } from "../services/ConfigService.js";
 import { videoEligible } from "../policies/videoPolicy.js";
 import { StreamingMembershipService } from "../services/StreamingMembershipService.js";
-import { DUEL_EXPERIENCE_TYPES,randomRoleplayPair } from "../policies/experiencePolicy.js";
+import { DUEL_EXPERIENCE_TYPES,randomRoleplayPair,randomGuessDuelWords,randomCharadesWord } from "../policies/experiencePolicy.js";
 const PARTICIPANTS_KEY="participants",SESSION_KEY="session";
 function virtualPeerFrom(value){if(!value||value.length>6000)return null;try{const peer=JSON.parse(value);return peer?.identityId&&peer?.persona&&peer?.config?peer:null}catch{return null}}
 // Workers AI doesn't hand back exact token usage in every response shape, so this is a deliberately
@@ -39,6 +39,7 @@ const previousExperienceType=previous.experienceType||experienceType||null;if(re
     server.send(serverEvent("READY",{participantId,resumeToken,resumed:Boolean(resumed||replaced),accountTakeover:Boolean(replaced),...(session.virtualPeer?{peer:{virtual:true,profile:{handle:session.virtualPeer.persona.handle,age:session.virtualPeer.persona.age,region:session.virtualPeer.persona.region,languages:session.virtualPeer.persona.languages}}}:{})}));if(resumed||replaced)this.sendToPeers(server,"PEER_RETURNED",{participantId});
     if(new Set(this.state.getWebSockets().map(socket=>socket.deserializeAttachment()?.participantId).filter(Boolean)).size===2||session.virtualPeer){this.broadcast("CHAT_STARTED",{participantCount:2,virtual:Boolean(session.virtualPeer)});this.broadcast("TIMER_STATE",timerState(session.startedAt,now,SESSION_DEFAULTS));if(!session.connectionCounted){session.connectionCounted=true;await this.recordActivity(session.virtualPeer?"virtual_connection_started":"connection_started");}if(session.virtualPeer&&!session.virtualOpeningDecided){const provider=createVirtualParticipantProvider(this.env,session.virtualPeer.config,this.env.VIRTUAL_RANDOM||Math.random),opening=provider.opening(session.virtualPeer.persona);session.virtualOpeningDecided=true;session.virtualOpeningSent=Boolean(opening);if(opening)server.send(serverEvent("MESSAGE_RECEIVED",{from:session.virtualPeer.identityId,text:opening,virtual:true}));}if(!session.virtualPeer&&!session.videoEligibilityChecked){session.videoEligibilityChecked=true;const ids=Object.keys(session.participants);if(ids.length===2&&session.mode==="video"){const [left,right]=ids.map(id=>session.participants[id]);if(this.env.VIDEO_BETA_OPEN==="1"||(left.experienceType&&right.experienceType))session.videoEligible=true;else try{const video=(await new ConfigService(this.env,this.env.FETCHER||fetch).video()).config;session.videoEligible=videoEligible(video,left.accountUserId,right.accountUserId,left.virtual,right.virtual);}catch{session.videoEligible=false;}if(session.videoEligible){const [initiatorId]=[...ids].sort();for(const id of ids)this.sendToParticipant(id,"VIDEO_ELIGIBLE",{initiator:id===initiatorId});}}else session.videoEligible=false;}await this.saveSession(session);}
     if(!session.virtualPeer&&!session.roleplayAssigned){const ids=Object.keys(session.participants);if(ids.length===2){session.roleplayAssigned=true;if(ids.every(id=>session.participants[id].experienceType==="roleplay")){const chosenPair=randomRoleplayPair(this.env.VIRTUAL_RANDOM||Math.random),flippedIds=(this.env.VIRTUAL_RANDOM||Math.random)()<0.5?ids:[...ids].reverse(),roles={[flippedIds[0]]:chosenPair.a,[flippedIds[1]]:chosenPair.b};session.roleplay={roles};for(const id of ids)this.sendToParticipant(id,"EXPERIENCE_ROLE",{yourRole:roles[id],peerRole:roles[ids.find(other=>other!==id)]});}await this.saveSession(session);}}
+    if(!session.virtualPeer&&!session.wordGameAssigned){const ids=Object.keys(session.participants);if(ids.length===2){session.wordGameAssigned=true;const types=ids.map(id=>session.participants[id].experienceType);const random=this.env.VIRTUAL_RANDOM||Math.random;if(types.every(t=>t==="guess_duel")){const [wordA,wordB]=randomGuessDuelWords(random),flipped=random()<0.5?ids:[...ids].reverse();session.wordGame={mode:"guess_duel",words:{[flipped[0]]:wordA,[flipped[1]]:wordB},lastGuessAt:{}};for(const id of ids)this.sendToParticipant(id,"EXPERIENCE_WORD",{yourWord:session.wordGame.words[id],mode:"guess_duel"});}else if(types.every(t=>t==="charades_duel")){const word=randomCharadesWord(random),flipped=random()<0.5?ids:[...ids].reverse(),[performerId,guesserId]=flipped;session.wordGame={mode:"charades_duel",performerId,guesserId,word,lastGuessAt:{}};this.sendToParticipant(performerId,"EXPERIENCE_WORD",{yourWord:word,mode:"charades_duel",role:"performer"});this.sendToParticipant(guesserId,"EXPERIENCE_WORD",{yourWord:null,mode:"charades_duel",role:"guesser"});}await this.saveSession(session);}}
     if(!session.virtualPeer&&!session.streamingMembershipChecked){const ids=Object.keys(session.participants);if(ids.length===2){session.streamingMembershipChecked=true;for(const id of ids){const accountUserId=session.participants[id].accountUserId;if(!accountUserId)continue;const active=await new StreamingMembershipService(this.env,this.env.FETCHER||fetch).status(accountUserId).catch(()=>false);session.participants[id].streamingMember=active;if(active)this.sendToParticipant(ids.find(other=>other!==id),"PEER_STREAMING_STATUS",{recording:true});}await this.saveSession(session);}}
     await this.scheduleNextAlarm(session,now);return new Response(null,{status:101,webSocket:client,headers:{"Sec-WebSocket-Protocol":"random-chat.v1"}});
   }
@@ -63,6 +64,7 @@ const previousExperienceType=previous.experienceType||experienceType||null;if(re
     else if(event.type==="VIDEO_OFFER"||event.type==="VIDEO_ANSWER"||event.type==="VIDEO_ICE_CANDIDATE"||event.type==="VIDEO_END")this.handleVideoSignal(socket,session,event);
     else if(event.type==="TYPING"){if(!session.ended&&!session.virtualPeer)this.sendToPeers(socket,"PEER_TYPING",{typing:event.payload.typing});}
     else if(event.type==="EXPERIENCE_SIGNAL")this.handleExperienceSignal(socket,attachment.participantId,session);
+    else if(event.type==="GUESS_ATTEMPT")this.handleGuessAttempt(socket,attachment.participantId,session,now,event.payload.guess);
     await this.saveSession(session);await this.scheduleNextAlarm(session,now);
   }
   async handleMessage(socket,participantId,event,session,now){
@@ -119,6 +121,30 @@ const previousExperienceType=previous.experienceType||experienceType||null;if(re
     this.sendToPeers(socket,"EXPERIENCE_RESULT",{outcome:"won"});
     session.ended=true;
     this.broadcast("SESSION_ENDED",{reason:"dad_joke_duel_result"});
+  }
+  // One try every 10 seconds per player, enforced server-side (client also shows a cooldown timer,
+  // but that's just UX -- this is the source of truth). guess_duel is symmetric (each guesses the
+  // other's word); charades_duel is asymmetric (only the non-performer can guess the shared word).
+  handleGuessAttempt(socket,participantId,session,now,guess){
+    if(session.ended||session.virtualPeer||!session.wordGame)return;
+    const game=session.wordGame;
+    if(game.mode==="charades_duel"&&participantId!==game.guesserId)return;
+    if(game.mode==="guess_duel"&&!Object.hasOwn(game.words,participantId))return;
+    game.lastGuessAt??={};
+    const last=game.lastGuessAt[participantId]||0;
+    if(now-last<10000)return socket.send(serverEvent("RATE_LIMITED",{reason:"guess_cooldown",retryAt:last+10000}));
+    game.lastGuessAt[participantId]=now;
+    const targetWord=game.mode==="charades_duel"?game.word:Object.entries(game.words).find(([id])=>id!==participantId)?.[1];
+    const normalize=value=>String(value||"").trim().toLowerCase();
+    if(targetWord&&normalize(guess)===normalize(targetWord)){
+      socket.send(serverEvent("EXPERIENCE_RESULT",{outcome:"won"}));
+      this.sendToPeers(socket,"EXPERIENCE_RESULT",{outcome:"lost"});
+      session.ended=true;
+      this.broadcast("SESSION_ENDED",{reason:`${game.mode}_result`});
+    }else{
+      socket.send(serverEvent("GUESS_RESULT",{correct:false,guess}));
+      this.sendToPeers(socket,"PEER_GUESSED",{guess});
+    }
   }
   handleVideoSignal(socket,session,event){if(session.ended||session.virtualPeer||!session.videoEligible)return socket.send(serverEvent("MESSAGE_REJECTED",{code:"video_unavailable"}));this.sendToPeers(socket,event.type,event.payload);}
   async handleContinue(socket,participantId,session,now,accepted){if(session.virtualPeer)return socket.send(serverEvent("MESSAGE_REJECTED",{code:"virtual_continuation_unavailable"}));if(!session.freeExpiredAt||session.ended)return socket.send(serverEvent("MESSAGE_REJECTED",{code:"continuation_not_available"}));if(accepted&&!await this.flagEnabled("paid_continuation_enabled"))return socket.send(serverEvent("MESSAGE_REJECTED",{code:"continuation_disabled"}));if(!accepted){session.ended=true;return this.broadcast("CONTINUE_NOT_ACCEPTED",{by:participantId});}const participant=session.participants[participantId];if(!participant?.accountUserId)return socket.send(serverEvent("MESSAGE_REJECTED",{code:"verified_account_required"}));session.continueAccepted??={};session.continueAccepted[participantId]=true;const participantIds=Object.keys(session.participants);if(participantIds.length===2&&participantIds.every(id=>session.continueAccepted[id])){session.paidActive=true;session.paymentHoldUntil=null;session.lastPaidMessageAt=now;this.broadcast("CONTINUE_ACTIVATED",{messageCredits:SESSION_DEFAULTS.paidMessageCredits});}else socket.send(serverEvent("CONTINUE_REQUESTED",{waitingForPeer:true}));}

@@ -66,3 +66,7 @@
 .chat-layout--theme-roleplay{background:linear-gradient(180deg,rgba(150,60,180,0.1),transparent 150px)}
 .chat-layout--theme-roleplay .chat-theme-banner{background:rgba(150,60,180,0.16);color:#f5e8ff}
 #roleplay-roles{margin:8px 0;padding:10px 12px;border-radius:8px;background:rgba(150,60,180,0.08)}
+.chat-layout--theme-guess_duel{background:linear-gradient(180deg,rgba(220,160,20,0.1),transparent 150px)}
+.chat-layout--theme-guess_duel .chat-theme-banner{background:rgba(220,160,20,0.18)}
+.chat-layout--theme-charades_duel{background:linear-gradient(180deg,rgba(20,160,140,0.1),transparent 150px)}
+.chat-layout--theme-charades_duel .chat-theme-banner{background:rgba(20,160,140,0.18)}
