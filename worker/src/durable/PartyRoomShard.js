@@ -182,7 +182,8 @@ export class PartyRoomShard {
     const freeze = room.mode === "freeze_challenge" && room.game ? { status: room.game.status, challenge: room.game.challenge, alive: room.game.alive, out: room.game.out, winnerParticipantId: room.game.winnerParticipantId } : null;
     const scavenger = room.mode === "scavenger_hunt" && room.game ? { status: room.game.status, prompt: room.game.prompt, foundOrder: room.game.foundOrder } : null;
     const scene = room.mode === "scene_challenge" && room.game ? { status: room.game.status, currentScene: room.game.currentScene, currentPrompterId: room.game.currentPrompterId, suggestions: room.game.suggestions, history: room.game.history } : null;
-    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia, freeze, scavenger, scene, videoPublisherIds: room.videoPublisherIds, videoPublisherLimit: MAX_VIDEO_PUBLISHERS }));
+    const rapBattle = room.mode === "rap_battle" && room.game ? this.publicRapBattleState(room) : null;
+    server.send(event("READY", { participantId, hostUserId: room.hostUserId, mode: room.mode, seated, isCoHost, seatLimit: MAX_ROOM_MEMBERS, seatedCount: room.seatedParticipantIds.length, members: this.memberList(), currentTrack, game, snakeLadder, rummy, ludo, teenPatti, andarBahar, dragonTiger, bidding, tugOfWar, eliminationReflex, predictionPool, charades, connectFour, mafia, freeze, scavenger, scene, rapBattle, videoPublisherIds: room.videoPublisherIds, videoPublisherLimit: MAX_VIDEO_PUBLISHERS }));
     if (room.mode === "mafia" && room.game?.roles?.[participantId] && room.game.alive.includes(participantId)) {
       const role = room.game.roles[participantId];
       const mafiaIds = Object.entries(room.game.roles).filter(([, r]) => r === MAFIA_ROLES.MAFIA).map(([id]) => id);
@@ -1387,11 +1388,65 @@ export class PartyRoomShard {
       return;
     }
 
+    // Rap Battle: host picks two seated members as performers, they trade turns on video while
+    // everyone else (the audience) votes for a winner once the battle wraps -- same self-managed
+    // turn-passing as Scene Challenge's host-driven flow, just for two people instead of one.
+    if (type === "RAP_BATTLE_START" && attachment.isHost && Array.isArray(payload.performerIds)) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "rap_battle") return;
+      const bySocket = new Map(this.state.getWebSockets().map(s => [(s.deserializeAttachment() || {}).participantId, s.deserializeAttachment() || {}]));
+      const performerIds = [...new Set(payload.performerIds)].filter(id => bySocket.get(id)?.seated);
+      if (performerIds.length !== 2) { socket.send(event("MESSAGE_REJECTED", { code: "rap_battle_needs_two_performers" })); return; }
+      room.game = { status: "active", performerIds, currentTurn: performerIds[0], votes: {}, winnerParticipantId: null };
+      await this.state.storage.put("room", room);
+      this.broadcastRapBattleState(room);
+      return;
+    }
+
+    if (type === "RAP_BATTLE_PASS") {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "rap_battle" || !room.game || room.game.status !== "active") return;
+      const myId = attachment.participantId;
+      if (!room.game.performerIds.includes(myId)) return;
+      room.game.currentTurn = room.game.performerIds.find(id => id !== myId);
+      await this.state.storage.put("room", room);
+      this.broadcastRapBattleState(room);
+      return;
+    }
+
+    if (type === "RAP_BATTLE_VOTE" && typeof payload.performerId === "string") {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "rap_battle" || !room.game || room.game.status !== "active") return;
+      if (!room.game.performerIds.includes(payload.performerId)) return;
+      const myId = attachment.participantId;
+      if (room.game.performerIds.includes(myId)) return;
+      room.game.votes[myId] = payload.performerId;
+      await this.state.storage.put("room", room);
+      this.broadcastRapBattleState(room);
+      return;
+    }
+
+    if (type === "RAP_BATTLE_END" && attachment.isHost) {
+      const room = (await this.state.storage.get("room")) || {};
+      if (room.mode !== "rap_battle" || !room.game) return;
+      const [a, b] = room.game.performerIds;
+      const tally = this.tallyRapBattleVotes(room.game.votes);
+      room.game.winnerParticipantId = (tally[a] || 0) === (tally[b] || 0) ? null : (tally[a] || 0) > (tally[b] || 0) ? a : b;
+      room.game.status = "finished";
+      await this.state.storage.put("room", room);
+      this.broadcastRapBattleState(room);
+      return;
+    }
+
     if (type === "VIDEO_START" && attachment.seated) {
       const room = (await this.state.storage.get("room")) || {};
       room.videoPublisherIds ??= [];
       if ((room.mode === "standup" || room.mode === "scene_challenge") && !attachment.isHost) {
         socket.send(event("MESSAGE_REJECTED", { code: "standup_performer_only" }));
+        return;
+      }
+      if (room.mode === "rap_battle" && !(room.game?.performerIds || []).includes(attachment.participantId)) {
+        socket.send(event("MESSAGE_REJECTED", { code: "rap_battle_performer_only" }));
         return;
       }
       if (room.videoPublisherIds.includes(attachment.participantId)) return;
@@ -1489,6 +1544,21 @@ export class PartyRoomShard {
   broadcastSceneState(room) {
     const game = room.game;
     this.broadcast(event("SCENE_STATE", { status: game.status, currentScene: game.currentScene, currentPrompterId: game.currentPrompterId, suggestions: game.suggestions, history: game.history }));
+  }
+
+  tallyRapBattleVotes(votes) {
+    const tally = {};
+    for (const performerId of Object.values(votes)) tally[performerId] = (tally[performerId] || 0) + 1;
+    return tally;
+  }
+
+  publicRapBattleState(room) {
+    const game = room.game;
+    return { status: game.status, performerIds: game.performerIds, currentTurn: game.currentTurn, tally: this.tallyRapBattleVotes(game.votes), winnerParticipantId: game.winnerParticipantId };
+  }
+
+  broadcastRapBattleState(room) {
+    this.broadcast(event("RAP_BATTLE_STATE", this.publicRapBattleState(room)));
   }
 
   async maybeResolveMafiaNight(room) {

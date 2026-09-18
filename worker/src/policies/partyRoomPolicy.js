@@ -40,6 +40,7 @@ export const ROOM_MODES=[
   {id:"freeze_challenge",name:"Freeze Challenge (Statue/Staring/Laugh)"},
   {id:"scavenger_hunt",name:"Scavenger Hunt"},
   {id:"scene_challenge",name:"Scene Challenge (Improv)"},
+  {id:"rap_battle",name:"Rap Battle"},
 ];
 export const SCENE_CHALLENGE_MAX_SUGGESTION_LENGTH=100;
 export const DRAW_GUESS_CHOOSE_SECONDS=15;
