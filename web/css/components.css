@@ -70,3 +70,7 @@
 .chat-layout--theme-guess_duel .chat-theme-banner{background:rgba(220,160,20,0.18)}
 .chat-layout--theme-charades_duel{background:linear-gradient(180deg,rgba(20,160,140,0.1),transparent 150px)}
 .chat-layout--theme-charades_duel .chat-theme-banner{background:rgba(20,160,140,0.18)}
+.recording-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+.recording-modal{position:relative;max-width:480px;width:100%;max-height:90vh;overflow:auto}
+.recording-modal-close{position:absolute;top:12px;right:12px}
+.recording-tabs{display:flex;gap:8px;margin:12px 0}

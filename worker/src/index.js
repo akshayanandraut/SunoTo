@@ -37,6 +37,8 @@ import { LiveWorldService } from "./services/LiveWorldService.js";
 import { ForumRoomShard } from "./durable/ForumRoomShard.js";
 import { FORUM_TOPICS, validForumTopicId } from "./policies/forumPolicy.js";
 import { SportsService } from "./services/SportsService.js";
+import { WalletService } from "./services/WalletService.js";
+import { RECORDING_CREDITS_PER_SESSION } from "./config/defaults.js";
 
 const MAX_API_BODY_BYTES=64*1024,MAX_WEBHOOK_BODY_BYTES=256*1024;
 function bytesStartWith(bytes,pattern,offset=0){return pattern.every((byte,index)=>bytes[offset+index]===byte);}
@@ -416,6 +418,9 @@ async function handleRequest(request, env) {
     }
     if(request.method==="POST"&&url.pathname==="/api/v1/live-world/opt-out"){
       const flagsBlocked=await requireFlags(env,["live_world_enabled"]);if(flagsBlocked)return flagsBlocked;const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});await new LiveWorldService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).optOut(user.id);return Response.json({ok:true});
+    }
+    if(request.method==="POST"&&url.pathname==="/api/v1/recording/start"){
+      const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const limited=await enforceRateLimit(request,env,"recording",user.id);if(limited)return limited;const body=await request.json().catch(()=>({}));if(typeof body.requestId!=="string"||!/^[a-zA-Z0-9-]{8,100}$/.test(body.requestId))return Response.json({error:"invalid_request_id"},{status:400});try{const result=await new WalletService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).apply({userId:user.id,delta:-RECORDING_CREDITS_PER_SESSION,type:"recording_charge",reason:"Screen recording session",idempotencyKey:`recording:${user.id}:${body.requestId}`,metadata:{requestId:body.requestId}});return Response.json({balance:result.balance,idempotent:result.idempotent,creditsCharged:RECORDING_CREDITS_PER_SESSION});}catch(error){return Response.json({error:error.message},{status:error.message==="insufficient_credits"?402:400});}
     }
     if(request.method==="POST"&&url.pathname==="/api/v1/live-world/place"){
       const flagsBlocked=await requireFlags(env,["live_world_enabled"]);if(flagsBlocked)return flagsBlocked;const user=await verifySupabaseUser(request,env);if(!user)return Response.json({error:"invalid_account_session"},{status:401});const limited=await enforceRateLimit(request,env,"live_world_place",user.id);if(limited)return limited;const body=await request.json().catch(()=>({})),lat=Number(body.lat),lng=Number(body.lng);if(!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return Response.json({error:"invalid_coordinates"},{status:400});try{const placement=await new LiveWorldService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch}).place(user.id,lat,lng);return Response.json({placement});}catch(error){return Response.json({error:error.message},{status:error.message==="live_world_opt_in_required"||error.message==="live_world_requires_premium"?403:400});}
