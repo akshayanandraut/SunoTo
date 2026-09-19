@@ -2587,6 +2587,11 @@ Second Party Room game (mode `snake_ladder` in `ROOM_MODES`). First of this batc
 - Added an explicit root package entry to `pnpm-workspace.yaml` and pinned `pnpm@11.19.0` in `package.json`, resolving the Cloudflare `packages field missing or empty` installation failure.
 - Frozen pnpm installation and `npm run build` completed successfully; only the existing local Node 22.11 versus Vite 22.12 recommendation remains.
 
+## Brand identity refresh — DONE, 2026-09-19
+- Added an original code-native SVG SunoTo mark built around orbiting conversation bubbles, a shared connection point, and a warm signal accent; it is legible at favicon size and works on the existing dark/light surfaces.
+- Wired the mark into app/admin headers, all static-page metadata, SVG shortcut favicon, PWA manifest, and service-worker shell assets while retaining existing PNG fallbacks.
+- Frontend and Worker builds pass; browser tab/app click-through remains pending until a local or deployed URL is available.
+
 ## Up next
 - ~~Push `supabase/migrations/202608300031_realtime_stats_and_private_ads.sql` to Supabase~~ **RESOLVED**: confirmed via `supabase migration list --linked` on 2026-08-31 that every local migration through `202608310049` is applied remotely — nothing outstanding.
 - ~~Games platform — blocked on currency name~~ **RESOLVED long ago** (Sparks); this bullet was stale. All originally-scoped solo/duo/trio/quad/multi game ideas from the 2026-08-31 brainstorm are now built and verified (see `QUESTIONS.md` "New game ideas" section) — Blind Auction, Tug of War Trivia, Elimination Reflex, Prediction Pool, and Streak Ladder.

@@ -6,7 +6,7 @@ export function header(activeCount, inChat = false, weather = null, signedIn = f
   const weatherBadge = weather === "loading" ? `<span class="weather-badge muted">Loading weather…</span>` : weather ? `<span class="weather-badge" title="${weather.label}">${weather.temperatureC}°C ${weather.label}</span>` : "";
   const walletBadge = signedIn && Number.isFinite(walletBalanceCredits) ? `<button class="wallet-badge" data-route="account" title="Sparks balance">⚡ ${Math.floor(walletBalanceCredits / 100).toLocaleString("en-IN")}</button>` : "";
   const themeSwitch = inChat ? "" : themeSwitcher(uiTheme);
-  return `<header class="site-header container"><a class="brand" href="#/" data-route="home"><span class="brand-mark"><img src="/assets/logo.png" alt="" width="34" height="34"></span> SunoTo</a><div class="header-actions">${weatherBadge}${activeBadge}${walletBadge}${themeSwitch}${actions}</div></header>`;
+  return `<header class="site-header container"><a class="brand" href="#/" data-route="home"><span class="brand-mark"><img src="/assets/sunoto-mark.svg" alt="" width="34" height="34"></span> SunoTo</a><div class="header-actions">${weatherBadge}${activeBadge}${walletBadge}${themeSwitch}${actions}</div></header>`;
 }
 
 function themeSwitcher(uiTheme) {
