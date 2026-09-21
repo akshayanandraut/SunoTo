@@ -2603,6 +2603,7 @@ Second Party Room game (mode `snake_ladder` in `ROOM_MODES`). First of this batc
 - Corrected the Worker `Permissions-Policy` geolocation directive to `geolocation=(self)` so the shipped temporary GPS/radius matching flow is not blocked by the Worker response layer; camera/microphone remain denied by policy.
 - No other unchecked roadmap item is a safe, self-contained implementation remaining in the repository. The remaining items require Cloudflare/Supabase owner access, payment/refund or ad-provider operations, licensed content/partner approval, a larger-SFU product decision, or an explicit decision about cleaning throwaway accounts.
 - Known pending external/decision-gated items: staging deployment verification, controlled payment/refund, ad-provider review, approved soak/cleanup, Reddit launch, Razorpay recurring billing, Cloudflare observability, virtual-persona quality validation, licensed radio-track curation, full-group-video Charades, and throwaway-account cleanup.
+- Local unit-test discovery and contracts are green as of 2026-09-21: 370 tests passed; live staging probes remain explicit scripts and are not auto-discovered.
 ## Up next
 - ~~Push `supabase/migrations/202608300031_realtime_stats_and_private_ads.sql` to Supabase~~ **RESOLVED**: confirmed via `supabase migration list --linked` on 2026-08-31 that every local migration through `202608310049` is applied remotely — nothing outstanding.
 - ~~Games platform — blocked on currency name~~ **RESOLVED long ago** (Sparks); this bullet was stale. All originally-scoped solo/duo/trio/quad/multi game ideas from the 2026-08-31 brainstorm are now built and verified (see `QUESTIONS.md` "New game ideas" section) — Blind Auction, Tug of War Trivia, Elimination Reflex, Prediction Pool, and Streak Ladder.
@@ -2629,5 +2630,3 @@ The first revenue-capable proof is:
 > Two real strangers match, chat for two minutes, both elect to continue, and each valid outgoing message is charged correctly from a verified wallet—without server-side chat history.
 
 Build toward that before adding future features.
-
-

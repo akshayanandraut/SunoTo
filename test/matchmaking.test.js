@@ -5,6 +5,7 @@ import { MatchmakingService } from "../worker/src/services/MatchmakingService.js
 import { PresenceShard } from "../worker/src/durable/PresenceShard.js";
 
 const user=(identityId,extra={})=>({identityId,blockedPeerIds:[],queuedAt:0,...extra});
+const presenceTestState=()=>({storage:{getAlarm:async()=>null,setAlarm:async()=>{}},blockConcurrencyWhile:async callback=>callback()});
 
 describe("random match policy",()=>{
   it("never matches an identity to itself",()=>assert.equal(isEligibleRandomPair(user("identity-a"),user("identity-a")),false));
@@ -28,7 +29,10 @@ describe("matchmaking lifecycle",()=>{
 });
 
 describe("ephemeral presence",()=>{
-  it("tracks real statuses without persistent storage",async()=>{const shard=new PresenceShard();await shard.fetch(new Request("https://presence/status",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({identityId:"identity-a",status:"waiting",anonymous:true})}));const response=await shard.fetch(new Request("https://presence/stats"));const stats=await response.json();assert.equal(stats.waiting,1);assert.equal(stats.anonymousOnline,1);assert.equal(Object.hasOwn(shard,"state"),false);});
-  it("resolves a registered public reference to the current ephemeral identity",async()=>{const shard=new PresenceShard();await shard.fetch(new Request("https://presence/status",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({identityId:"identity-device",status:"online",anonymous:false,accountUserId:"account-user",publicRef:"public-user"})}));const found=await(await shard.fetch(new Request("https://presence/identity/public-user"))).json();assert.deepEqual(found,{online:true,status:"online",identityId:"identity-device",publicRef:"public-user",accountUserId:"account-user"});});
-  it("resolves a public reference to its newest device heartbeat",async()=>{const shard=new PresenceShard(),now=Date.now();shard.presence.set("identity-old",{status:"offline",publicRef:"public-user",accountUserId:"account-user",lastSeen:now-1});shard.presence.set("identity-new",{status:"chatting",publicRef:"public-user",accountUserId:"account-user",lastSeen:now});const found=await(await shard.fetch(new Request("https://presence/identity/public-user"))).json();assert.equal(found.identityId,"identity-new");assert.equal(found.online,true);});
+  it("tracks real statuses without persistent storage",async()=>{const shard=new PresenceShard(presenceTestState(),{});await shard.fetch(new Request("https://presence/status",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({identityId:"identity-a",status:"waiting",anonymous:true})}));const response=await shard.fetch(new Request("https://presence/stats"));const stats=await response.json();assert.equal(stats.waiting,1);assert.equal(stats.anonymousOnline,1);assert.equal(shard.presence instanceof Map,true);});
+  it("resolves a registered public reference to the current ephemeral identity",async()=>{const shard=new PresenceShard(presenceTestState(),{});await shard.fetch(new Request("https://presence/status",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({identityId:"identity-device",status:"online",anonymous:false,accountUserId:"account-user",publicRef:"public-user"})}));const found=await(await shard.fetch(new Request("https://presence/identity/public-user"))).json();assert.deepEqual(found,{online:true,status:"online",identityId:"identity-device",publicRef:"public-user",accountUserId:"account-user"});});
+  it("resolves a public reference to its newest device heartbeat",async()=>{const shard=new PresenceShard(presenceTestState(),{}),now=Date.now();shard.presence.set("identity-old",{status:"offline",publicRef:"public-user",accountUserId:"account-user",lastSeen:now-1});shard.presence.set("identity-new",{status:"chatting",publicRef:"public-user",accountUserId:"account-user",lastSeen:now});const found=await(await shard.fetch(new Request("https://presence/identity/public-user"))).json();assert.equal(found.identityId,"identity-new");assert.equal(found.online,true);});
 });
+
+
+
