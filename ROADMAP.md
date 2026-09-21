@@ -2583,7 +2583,12 @@ Second Party Room game (mode `snake_ladder` in `ROOM_MODES`). First of this batc
 - Supabase Auth/Postgres remains the persistent account/business layer; Cloudflare Workers + Durable Objects remain the realtime/API layer.
 - Removed the temporary Vercel deployment configuration and corrected deployment documentation so it no longer implies a hybrid Vercel frontend.
 - **Pending:** connect GitHub to Cloudflare Pages, configure Pages public variables and Supabase redirect URLs, provision Worker secrets/bindings, then run staging and production gates with real credentials. Do not delete any existing Vercel project until the Cloudflare production URL is verified.
-## Public app health endpoint — DONE, 2026-09-13`r`n- Added `GET /api/health` with only `status`, `app`, sanitized `revision`, and server `timestamp`.`r`n- The endpoint performs no dependency/database calls, exposes no infrastructure or secret details, and is safe for status monitoring; the existing detailed `/api/v1/health` remains available for controlled operational checks.`r`n- Added focused verifier coverage in `test/hardening.test.js`.`r`n`r`n## Cloudflare package-install compatibility — DONE, 2026-09-13
+## Public app health endpoint — DONE, 2026-09-13
+- Added `GET /api/health` with only `status`, `app`, sanitized `revision`, and server `timestamp`.
+- The endpoint performs no dependency/database calls, exposes no infrastructure or secret details, and is safe for status monitoring; the existing detailed `/api/v1/health` remains available for controlled operational checks.
+- Added focused verifier coverage in `test/hardening.test.js`.
+
+## Cloudflare package-install compatibility — DONE, 2026-09-13
 - Added an explicit root package entry to `pnpm-workspace.yaml` and pinned `pnpm@11.19.0` in `package.json`, resolving the Cloudflare `packages field missing or empty` installation failure.
 - Frozen pnpm installation and `npm run build` completed successfully; only the existing local Node 22.11 versus Vite 22.12 recommendation remains.
 
@@ -2594,7 +2599,8 @@ Second Party Room game (mode `snake_ladder` in `ROOM_MODES`). First of this batc
 
 ## Completion audit — 2026-09-20
 
-- The camera/microphone device picker is already implemented in the video chat UI (`enumerateDevices()` plus `VideoCallClient.switchDevice()` for both inputs). It remains deployment-blocked by the current `Permissions-Policy` headers, which explicitly deny camera and microphone access. Changing those headers is a privacy/security-sensitive owner decision and is not applied automatically.`r`n- Corrected the Worker `Permissions-Policy` geolocation directive to `geolocation=(self)` so the shipped temporary GPS/radius matching flow is not blocked by the Worker response layer; camera/microphone remain denied by policy.
+- The camera/microphone device picker is already implemented in the video chat UI (`enumerateDevices()` plus `VideoCallClient.switchDevice()` for both inputs). It remains deployment-blocked by the current `Permissions-Policy` headers, which explicitly deny camera and microphone access. Changing those headers is a privacy/security-sensitive owner decision and is not applied automatically.
+- Corrected the Worker `Permissions-Policy` geolocation directive to `geolocation=(self)` so the shipped temporary GPS/radius matching flow is not blocked by the Worker response layer; camera/microphone remain denied by policy.
 - No other unchecked roadmap item is a safe, self-contained implementation remaining in the repository. The remaining items require Cloudflare/Supabase owner access, payment/refund or ad-provider operations, licensed content/partner approval, a larger-SFU product decision, or an explicit decision about cleaning throwaway accounts.
 - Known pending external/decision-gated items: staging deployment verification, controlled payment/refund, ad-provider review, approved soak/cleanup, Reddit launch, Razorpay recurring billing, Cloudflare observability, virtual-persona quality validation, licensed radio-track curation, full-group-video Charades, and throwaway-account cleanup.
 ## Up next
@@ -2623,4 +2629,5 @@ The first revenue-capable proof is:
 > Two real strangers match, chat for two minutes, both elect to continue, and each valid outgoing message is charged correctly from a verified wallet—without server-side chat history.
 
 Build toward that before adding future features.
+
 
