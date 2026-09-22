@@ -2597,13 +2597,13 @@ Second Party Room game (mode `snake_ladder` in `ROOM_MODES`). First of this batc
 - Wired the mark into app/admin headers, all static-page metadata, SVG shortcut favicon, PWA manifest, and service-worker shell assets while retaining existing PNG fallbacks.
 - Frontend and Worker builds pass; browser tab/app click-through remains pending until a local or deployed URL is available.
 
-## Completion audit — 2026-09-20
+## Completion audit — 2026-09-22
 
 - The camera/microphone device picker is already implemented in the video chat UI (`enumerateDevices()` plus `VideoCallClient.switchDevice()` for both inputs). It remains deployment-blocked by the current `Permissions-Policy` headers, which explicitly deny camera and microphone access. Changing those headers is a privacy/security-sensitive owner decision and is not applied automatically.
 - Corrected the Worker `Permissions-Policy` geolocation directive to `geolocation=(self)` so the shipped temporary GPS/radius matching flow is not blocked by the Worker response layer; camera/microphone remain denied by policy.
 - No other unchecked roadmap item is a safe, self-contained implementation remaining in the repository. The remaining items require Cloudflare/Supabase owner access, payment/refund or ad-provider operations, licensed content/partner approval, a larger-SFU product decision, or an explicit decision about cleaning throwaway accounts.
 - Known pending external/decision-gated items: staging deployment verification, controlled payment/refund, ad-provider review, approved soak/cleanup, Reddit launch, Razorpay recurring billing, Cloudflare observability, virtual-persona quality validation, licensed radio-track curation, full-group-video Charades, and throwaway-account cleanup.
-- Local unit-test discovery and contracts are green as of 2026-09-21: 370 tests passed; live staging probes remain explicit scripts and are not auto-discovered.
+- Local unit-test discovery and contracts are green as of 2026-09-22: 370 tests passed; `npm run check` passed, and live staging probes remain explicit scripts and are not auto-discovered.
 ## Up next
 - ~~Push `supabase/migrations/202608300031_realtime_stats_and_private_ads.sql` to Supabase~~ **RESOLVED**: confirmed via `supabase migration list --linked` on 2026-08-31 that every local migration through `202608310049` is applied remotely — nothing outstanding.
 - ~~Games platform — blocked on currency name~~ **RESOLVED long ago** (Sparks); this bullet was stale. All originally-scoped solo/duo/trio/quad/multi game ideas from the 2026-08-31 brainstorm are now built and verified (see `QUESTIONS.md` "New game ideas" section) — Blind Auction, Tug of War Trivia, Elimination Reflex, Prediction Pool, and Streak Ladder.
