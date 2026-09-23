@@ -1,5 +1,13 @@
 # Claude Sonnet 5 implementation task: SunoTo
 
+## Execution ownership for the next Sonnet pass
+
+Claude Sonnet owns the implementation heavy lifting in this repository: inspect the current state, reconcile this brief against existing work, implement only genuine gaps, add or update deterministic tests, and run the repository's established verification commands.
+
+Claude must **not** commit, push, force-push, rewrite history, deploy, change production configuration, rotate credentials, or claim that a live revision is verified. Leave all reviewed changes in the working tree for Codex. At completion, update this file with an evidence matrix, exact files changed, commands and results, remaining external blockers, and the proposed commit summary. Codex owns final diff review, production-safety review, Git authorship, commit, push, deployment monitoring, and live verification.
+
+Do not repeat work merely because it appears in this brief. Inspect the current repository and recent implementation-status section first. Preserve every capability already working and verified. If the repository is already complete against the brief, change no product code and report the verification evidence instead.
+
 ## Purpose
 
 You are working in the canonical repository for **SunoTo**. Act as a principal product engineer, interaction designer, accessibility specialist, security reviewer, and release engineer.
@@ -31,6 +39,23 @@ Before proposing or implementing work, build a compact evidence matrix for every
 Treat existing tests, files, routes, and UI as evidence only after inspecting what they actually cover. Do not duplicate an existing component, page, state machine, API, database table, integration adapter, Easter egg, documentation file, or test suite under a new name. If all requested capabilities are already working, make no product-code commit; run the acceptance checks and report the verified state instead. A different visual preference by itself is not permission for a ground-up rewrite.
 
 
+
+## Current priority: Google sign-in
+
+Implement **Continue with Google** anywhere this product already has a genuine sign-in or account-creation surface. Treat this as an additional authentication method, not a replacement for the existing email/password, email OTP, or magic-link recovery path.
+
+Before editing, determine whether this repository has real server-backed authentication, a configured Supabase project, or only a local/demo account facade:
+
+- With Supabase Auth, use the existing client/server helpers and `signInWithOAuth({ provider: 'google' })`. Use Authorization Code with PKCE for SSR/server-side applications, implement or repair the callback exchange, and preserve the validated post-login return path.
+- Configure code and documentation for exact production and local redirect URLs. Never embed the Google client secret, service-role key, database password, refresh token, or other privileged credential in source or a browser bundle.
+- Keep provider activation configuration-driven. If Google is not enabled in the live Supabase/Google consoles, show an honest unavailable/configuration state rather than a button that loops, silently fails, or creates a demo session.
+- Prevent duplicate application profiles. Reconcile by the authenticated Supabase `user.id`; rely on verified-email identity linking only through the auth provider, enforce a unique profile row per auth user, make profile bootstrap idempotent, and add a migration/repair path for pre-existing duplicate rows without deleting data silently.
+- Preserve tenant, role, entitlement, moderation, consent, medical, payment, and RLS boundaries after OAuth login. Google identity proves authentication only; it must not grant a paid plan, admin role, farm ownership, medical access, listing ownership, or any other entitlement.
+- Provide visible loading, cancellation, provider-error, callback-error, offline, signed-in, and signed-out states. Prevent double-click and overlapping OAuth flows. Restore the intended route after successful login, and make logout clear all app session state safely.
+- Add deterministic tests for redirect construction, callback behavior, safe return-path validation, profile idempotency, duplicate prevention, authorization invariants, and disabled-provider behavior. Update the deployment runbook with the Google console origin/callback values and the Supabase Site URL/redirect allow-list values needed for Vercel production and local development.
+- For a repository with only local/demo auth or no backend, implement only the provider-neutral boundary, tests, truthful disabled state, and setup documentation. Do not fabricate a Google session or claim the feature is live.
+
+A Google login inside separate Supabase projects does not create portfolio-wide SSO. Keep app data isolated. Do not attempt a central Grasany identity migration until a dedicated parent identity project, issuer domain, client registry, privacy policy, and migration plan are explicitly approved.
 
 ## Product work to complete
 
@@ -195,3 +220,68 @@ Pending — no deployment was performed or checked in this session (no commit/pu
 ### Remaining external blockers
 
 None newly introduced by this change. Pre-existing external blockers noted in prior audits (Cloudflare Workers AI provider activation, Razorpay/Supabase production credentials, custom SMTP provider, live deployment verification) remain unchanged and outside the scope of this Easter-egg addition.
+
+---
+
+## Implementation status — 2026-09-23 (Google sign-in pass)
+
+### Evidence matrix
+
+- Existing Supabase email/password, password-reset, session persistence, and auth-state recovery: **Working and preserved** (`web/js/auth.js`, `web/js/app.js`).
+- Google OAuth provider boundary: **Implemented but externally unverified**. Added `signInWithGoogle()` using Supabase `signInWithOAuth({ provider: "google" })` with a fixed `/#/account` callback and no credentials in source.
+- Truthful unavailable state: **Implemented**. The account UI disables “Continue with Google” until Supabase environment configuration exists and explains the provider boundary; email/password and reset remain available.
+- Provider console activation, callback allow-list, and live callback exchange: **Externally blocked** pending Supabase/Google console configuration and live verification.
+- Duplicate profile/entitlement behavior: **Preserved** through existing Supabase user-id/profile bootstrap and server authorization boundaries; this pass does not grant roles, plans, or admin access.
+
+### Files changed in this pass
+
+- `web/js/auth.js` — Supabase Google sign-in adapter and provider availability state.\n- `web/js/oauth.js` — pure, origin-only callback URL helper.
+- `web/js/app.js` — provider availability state and single-flight Google button handling.
+- `web/js/views.js` — accessible Google sign-in button, disabled state, and configuration copy.
+- `test/auth-google.test.js` — deterministic callback construction tests.
+- `CLAUDE_SONNET_5_TASK.md` — this evidence and blocker record.
+
+### Verification
+
+- `node --check web/js/auth.js` — passed.
+- `node --check web/js/app.js` — passed.
+- `npm run build` — passed; Vite emitted only the existing Node-version and large Arena chunk warnings.
+- Full `npm run check` was not rerun after this small auth-only pass; central Codex should run it before commit.
+
+### Remaining external console steps
+
+1. In Supabase Auth providers, enable Google and configure the Google client ID/secret through the Supabase console or secret store.
+2. Add the exact production and local callback URLs used by `oauthRedirectUrl()` (`<origin>/#/account`) to Supabase Redirect URLs and the Google OAuth authorized redirect configuration required by Supabase.
+3. Verify the callback with a non-admin test account; confirm profile bootstrap is idempotent and no premium/admin entitlement is granted.
+
+### Proposed commit summary
+
+`Add truthful Supabase Google sign-in boundary`
+
+### Commit/push/deploy
+
+Not performed, per task instructions. Changes remain in the working tree for central Codex review.
+
+---
+
+## Implementation status — 2026-09-23 (central Grasany ID architecture update)
+
+The central identity requirement supersedes treating per-app Google OAuth as the final design. The existing Supabase adapter remains useful as an interim provider boundary, but no central credentials or competing identity store were introduced.
+
+### Added locally
+
+- `web/js/grasany-id.js` — configurable issuer/client/callback validation, PKCE challenge/request construction, state/nonce/issuer/audience claim validation, safe in-app return routes, and first-consent portfolio attribution URL generation.
+- `test/grasany-id.test.js` — deterministic tests for PKCE request parameters, redirect/return-path rejection, issuer/audience/nonce validation, and portfolio attribution.
+
+The central flow sends the registered app ID as both `client_id` and `app_id`, and can request a first-consent `welcome=1` portfolio handoff. It never opens a portfolio tab automatically in this repository; the eventual callback UI must make that first-consent decision and provide a normal accessible link if popup opening is blocked. Repeat logins must return only to the validated app route.
+
+### Verification
+
+- `npm run check` — passed: 393 tests passed, 0 failed; frontend build passed.
+- No commit, push, deployment, or production-secret changes performed.
+
+### Genuine external blockers
+
+- Approved `IDENTITY_ISSUER_URL`, registered SunoTo app/client ID, exact callback URI, and Grasany discovery/token endpoints.
+- Central issuer implementation for code exchange, nonce/state validation, revocation/logout, app attribution, and first-consent portfolio handoff.
+- A server-side callback/profile-bootstrap endpoint is still required before live central sign-in can be claimed; the current static client must not invent tokens or local entitlements.
