@@ -63,6 +63,7 @@ const previousExperienceType=previous.experienceType||experienceType||null;if(re
     else if(event.type==="BLOCK")await this.handleSafetyAction(socket,attachment.participantId,session,"block");
     else if(event.type==="VIDEO_OFFER"||event.type==="VIDEO_ANSWER"||event.type==="VIDEO_ICE_CANDIDATE"||event.type==="VIDEO_END")this.handleVideoSignal(socket,session,event);
     else if(event.type==="TYPING"){if(!session.ended&&!session.virtualPeer)this.sendToPeers(socket,"PEER_TYPING",{typing:event.payload.typing});}
+    else if(event.type==="SIGNAL_PULSE")this.handleSignalPulse(socket,attachment.participantId,session,now,event.payload.pattern);
     else if(event.type==="EXPERIENCE_SIGNAL")this.handleExperienceSignal(socket,attachment.participantId,session);
     else if(event.type==="GUESS_ATTEMPT")this.handleGuessAttempt(socket,attachment.participantId,session,now,event.payload.guess);
     await this.saveSession(session);await this.scheduleNextAlarm(session,now);
@@ -145,6 +146,19 @@ const previousExperienceType=previous.experienceType||experienceType||null;if(re
       socket.send(serverEvent("GUESS_RESULT",{correct:false,guess}));
       this.sendToPeers(socket,"PEER_GUESSED",{guess});
     }
+  }
+  // Signal handshake Easter egg: a silent, optional visual "pulse" the sender can trigger and the
+  // peer's browser can independently match if it picks the same pattern around the same time. This
+  // relays only a fixed pattern id (never chat text, never identity) and is rate-limited exactly
+  // like TYPING -- purely ephemeral in-session state, never written to Durable Object storage
+  // fields that survive session end, never analytics-recorded.
+  handleSignalPulse(socket,participantId,session,now,pattern){
+    if(session.ended||session.virtualPeer)return;
+    session.signalPulseRate??={};
+    const last=session.signalPulseRate[participantId]||0;
+    if(now-last<3500)return socket.send(serverEvent("RATE_LIMITED",{reason:"signal_pulse_cooldown",retryAt:last+3500}));
+    session.signalPulseRate[participantId]=now;
+    this.sendToPeers(socket,"PEER_SIGNAL_PULSE",{pattern});
   }
   handleVideoSignal(socket,session,event){if(session.ended||session.virtualPeer||!session.videoEligible)return socket.send(serverEvent("MESSAGE_REJECTED",{code:"video_unavailable"}));this.sendToPeers(socket,event.type,event.payload);}
   async handleContinue(socket,participantId,session,now,accepted){if(session.virtualPeer)return socket.send(serverEvent("MESSAGE_REJECTED",{code:"virtual_continuation_unavailable"}));if(!session.freeExpiredAt||session.ended)return socket.send(serverEvent("MESSAGE_REJECTED",{code:"continuation_not_available"}));if(accepted&&!await this.flagEnabled("paid_continuation_enabled"))return socket.send(serverEvent("MESSAGE_REJECTED",{code:"continuation_disabled"}));if(!accepted){session.ended=true;return this.broadcast("CONTINUE_NOT_ACCEPTED",{by:participantId});}const participant=session.participants[participantId];if(!participant?.accountUserId)return socket.send(serverEvent("MESSAGE_REJECTED",{code:"verified_account_required"}));session.continueAccepted??={};session.continueAccepted[participantId]=true;const participantIds=Object.keys(session.participants);if(participantIds.length===2&&participantIds.every(id=>session.continueAccepted[id])){session.paidActive=true;session.paymentHoldUntil=null;session.lastPaidMessageAt=now;this.broadcast("CONTINUE_ACTIVATED",{messageCredits:SESSION_DEFAULTS.paidMessageCredits});}else socket.send(serverEvent("CONTINUE_REQUESTED",{waitingForPeer:true}));}

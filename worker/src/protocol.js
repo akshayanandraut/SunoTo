@@ -23,6 +23,7 @@ export function parseClientEvent(raw){
     return{ok:true,event:{...event,payload:{data,durationSeconds}}};
   }
   if(event.type==="TYPING"){const typing=event.payload?.typing;if(typeof typing!=="boolean")return{ok:false,code:"invalid_typing"};return{ok:true,event:{...event,payload:{typing}}};}
+  if(event.type==="SIGNAL_PULSE"){const pattern=event.payload?.pattern;if(!["wave","pulse","spark"].includes(pattern))return{ok:false,code:"invalid_signal_pattern"};return{ok:true,event:{...event,payload:{pattern}}};}
   if(event.type==="EXPERIENCE_SIGNAL"){const signal=event.payload?.signal;if(!["laughed","moved","blinked","dozed_off"].includes(signal))return{ok:false,code:"invalid_experience_signal"};return{ok:true,event:{...event,payload:{signal}}};}
   if(event.type==="GUESS_ATTEMPT"){const guess=event.payload?.guess;if(typeof guess!=="string"||!guess.trim()||[...guess].length>60)return{ok:false,code:"invalid_guess"};return{ok:true,event:{...event,payload:{guess:guess.trim()}}};}
   if(["HELLO","HEARTBEAT","SESSION_RESUME","ACTIVITY","NEXT_REQUEST","SESSION_END","CONTINUE_ACCEPT","CONTINUE_DECLINE","CONTACT_UNLOCK_REQUEST","CONTACT_UNLOCK_ACCEPT","CONTACT_UNLOCK_DECLINE","LIKE","BLOCK","VIDEO_END"].includes(event.type))return{ok:true,event};
