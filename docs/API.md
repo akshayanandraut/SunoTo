@@ -38,11 +38,11 @@ Wallet mutation is intentionally absent from the public API. Trusted Worker serv
 
 ## Payments
 
-- `POST /api/v1/payments/orders` accepts `{ "amountPaise": 5000, "couponCode": "optional" }` for a verified account and returns a server-created Razorpay order plus the server-resolved Credits and active offer. The minimum is ₹50.
-- `POST /api/v1/payments/verify` accepts the three Razorpay Checkout result fields, verifies their HMAC, fetches provider status and credits only a captured payment belonging to the caller's paid order.
-- `POST /api/v1/payments/webhook` accepts Razorpay events. It authenticates `X-Razorpay-Signature` against the raw body and deduplicates `X-Razorpay-Event-Id`.
+SunoTo does not hold merchant, gateway, or webhook credentials. Payment-provider configuration belongs to the central Grasany payment service; a product may only consume a centrally approved scoped contract.
 
-`payment.captured` and `order.paid` reconcile the same wallet-credit idempotency key. `refund.processed` appends a proportional credit reversal rather than changing ledger history.
+Until that contract, product-scoped credential, callback/webhook routing, and live merchant verification are supplied in an accepted central packet, payment order, verification, membership and webhook routes return `503 central_payment_service_not_configured`. Public configuration also forces `payments_enabled` to false and the browser does not load a payment-provider checkout SDK.
+
+When centrally enabled, crediting and refunds must still be performed only by the trusted Worker through idempotent product-local wallet ledger operations. Central identity does not grant product membership, roles, consent or payment entitlement.
 
 ## Favourite reconnect
 
