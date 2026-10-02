@@ -1,0 +1,8 @@
+{
+  "timestampMs": 1700000000456,
+  "method": "GET",
+  "path": "/api/notifications/v1/status?notification_id=65c41bce-2842-4cb1-a19e-1a962136e072",
+  "rawBody": "",
+  "testSecret": "test-secret",
+  "appId": "sunoto"
+}

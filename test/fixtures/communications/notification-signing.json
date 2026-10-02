@@ -1,0 +1,8 @@
+{
+  "timestampMs": 1700000000123,
+  "method": "POST",
+  "path": "/api/notifications/v1/requests",
+  "rawBody": "{}",
+  "testSecret": "test-secret",
+  "appId": "sunoto"
+}

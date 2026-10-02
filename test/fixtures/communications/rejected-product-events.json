@@ -1,0 +1,6 @@
+[
+  {"channel":"email","templateAlias":"support.acknowledged","reason":"communications_globally_disabled"},
+  {"channel":"sms","templateAlias":null,"reason":"communications_sms_sender_template_not_approved"},
+  {"channel":"whatsapp","templateAlias":null,"reason":"communications_channel_disabled"},
+  {"channel":"push","templateAlias":null,"reason":"communications_channel_not_supported"}
+]
