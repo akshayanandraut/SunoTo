@@ -1,6 +1,17 @@
 name = "sunoto"
 main = "src/index.js"
-compatibility_date = "2026-08-01"
+compatibility_date = "2026-10-02"
+
+# Production logs and traces are enabled for launch investigation. No request
+# content, central tokens, payment data, or chat messages may be logged.
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+
+[observability.traces]
+enabled = true
 
 # Serve the built frontend (dist/, produced by `npm run build`) from this same Worker, so the site
 # and its API share one origin and one deployment. run_worker_first routes only /api/* to the Worker

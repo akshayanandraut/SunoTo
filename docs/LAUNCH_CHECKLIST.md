@@ -13,9 +13,10 @@ Phase 24 stays incomplete until the external evidence below exists. Repository t
 
 ## Payments
 
-- Begin with Razorpay test mode. Complete a ₹50 recharge, checkout verification, signed webhook replay, duplicate event, failed capture and partial/full refund reconciliation.
-- Reconcile provider order/payment/refund IDs against `payment_orders`, provider-event dedupe rows, wallet balance and the append-only ledger.
-- After business/KYC activation and counsel-approved terms, perform one controlled live ₹50 payment and refund. Never paste keys or payment data into the release record; retain only provider references and reconciliation evidence.
+- Obtain an accepted central Grasany payment packet with an approved merchant/provider, product-scoped credential reference, callback/webhook routing, and live-verification status. Never add a provider key, merchant secret, or webhook secret to SunoTo.
+- In central test mode, complete a ₹50 recharge through the scoped contract, provider-status verification, signed central webhook relay, duplicate event, failed capture and partial/full refund reconciliation.
+- Reconcile central provider references against `payment_orders`, provider-event dedupe rows, wallet balance and the append-only ledger. Central identity must not be treated as product payment entitlement.
+- After central merchant/KYC activation and counsel-approved terms, perform one controlled live ₹50 payment and refund. Never paste credentials or payment data into the release record; retain only provider references and reconciliation evidence.
 - Record amount and refund as integer paise, currency, captured/processed confirmations, credited and reversed Credits, and duplicate-webhook outcome. The launch validator requires 5,000 paise INR, a full refund, equal credit/reversal quantities and confirmed idempotency.
 
 ## Advertising
