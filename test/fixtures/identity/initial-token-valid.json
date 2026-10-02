@@ -1,0 +1,8 @@
+{
+  "access_token": "fixture-access-token",
+  "id_token": "fixture-id-token",
+  "refresh_token": "fixture-refresh-token",
+  "token_type": "Bearer",
+  "expires_in": 300,
+  "scope": "openid email profile"
+}
