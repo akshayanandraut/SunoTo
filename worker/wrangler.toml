@@ -71,6 +71,10 @@ class_name = "ArenaLobbyShard"
 name = "IDENTITY_SESSIONS"
 class_name = "IdentitySessionShard"
 
+[[durable_objects.bindings]]
+name = "HEARTBEAT_GUARD"
+class_name = "HeartbeatGuardShard"
+
 # R2 (media storage for avatars + radio track audio/artwork) is intentionally NOT bound by default.
 # Cloudflare refuses to deploy a Worker whose config references an R2 bucket before R2 is enabled on
 # the account ("Please enable R2 through the Cloudflare Dashboard", API error 10042), which blocks the
@@ -129,6 +133,10 @@ new_sqlite_classes = ["ArenaLobbyShard"]
 tag = "v10"
 new_sqlite_classes = ["IdentitySessionShard"]
 
+[[migrations]]
+tag = "v11"
+new_sqlite_classes = ["HeartbeatGuardShard"]
+
 [env.dev]
 vars = { ALLOW_FORCE_PERSONA = "1", ALLOWED_ORIGINS = "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174,http://127.0.0.1:5175,http://localhost:5175,http://127.0.0.1:5176,http://localhost:5176", VIDEO_BETA_OPEN = "1" }
 
@@ -175,6 +183,10 @@ class_name = "ArenaLobbyShard"
 [[env.dev.durable_objects.bindings]]
 name = "IDENTITY_SESSIONS"
 class_name = "IdentitySessionShard"
+
+[[env.dev.durable_objects.bindings]]
+name = "HEARTBEAT_GUARD"
+class_name = "HeartbeatGuardShard"
 
 # See the R2 note above -- uncomment alongside the top-level [[r2_buckets]] block.
 # [[env.dev.r2_buckets]]
