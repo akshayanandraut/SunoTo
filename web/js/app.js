@@ -1,9 +1,9 @@
 import { views } from "./views.js";
 const GAME_ROUTES=new Set(["games","reflex","wheel","coin-flip","coin-tower","streak-ladder","sparks-pool","trivia","roulette","sportsbook","slots-777","scratch-card"]);
-import { getAnonymousIdentity, peerHandle, createFriendlyHandle } from "./anonymous-identity.js";
+import { getAnonymousIdentity, peerHandle } from "./anonymous-identity.js";
 import { randomActiveCount } from "./active-users.js";
 import { registeredUserCount } from "./registered-users.js";
-import { nextRadioListenerCount, randomRadioListenerCount } from "./radio-active-users.js";
+import { RADIO_PLAYBACK_MESSAGES, enableRadioPlayerControls, setRadioPlaybackState, syncRadioMediaSession } from "./radio-playback.js";
 import { loadPreferences, savePreferences } from "./preferences.js";
 import { loadUiTheme, saveUiTheme, applyUiTheme } from "./ui-theme.js";
 import { localHistory } from "./local-history.js";
@@ -125,7 +125,7 @@ function applyRadioTrack(track){
     player.src=track.mediaUrl;
     const seek=()=>{if(track.elapsedSeconds>0)player.currentTime=track.elapsedSeconds;player.removeEventListener("loadedmetadata",seek);};
     player.addEventListener("loadedmetadata",seek);
-    player.play().catch(()=>{});
+    player.play().catch(()=>showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.blocked,true));
   }
 }
 function stopRadioVisualizer(){cancelAnimationFrame(radioAnimationId);radioAnimationId=null;radioSourceElement=null;}
@@ -165,27 +165,28 @@ function spawnRadioReaction(reaction,name){
   host.append(node);
   setTimeout(()=>node.remove(),2200);
 }
-let radioSyntheticTimer=null;
-function stopSyntheticRadioReactions(){if(radioSyntheticTimer){clearTimeout(radioSyntheticTimer);radioSyntheticTimer=null;}}
-function scheduleSyntheticRadioReaction(){
-  if(!document.querySelector("#party-radio-reactions")||!state.partyCurrentTrack){radioSyntheticTimer=null;return;}
-  const listeners=Math.max(20,state.partyListenerEstimate||2000);
-  const reactionsPerMinute=Math.max(2,listeners*0.01/10);
-  const delay=Math.max(1500,Math.min(20000,60000/reactionsPerMinute*(0.5+Math.random())));
-  radioSyntheticTimer=setTimeout(()=>{
-    const reactions=["like","heart","fire","clap"];
-    spawnRadioReaction(reactions[Math.floor(Math.random()*reactions.length)],createFriendlyHandle());
-    scheduleSyntheticRadioReaction();
-  },delay);
-}
+function stopSyntheticRadioReactions(){}
+function scheduleSyntheticRadioReaction(){}
 function updateRadioMediaSession(track){
-  if(!("mediaSession" in navigator))return;
-  if(!track){navigator.mediaSession.metadata=null;navigator.mediaSession.playbackState="none";return;}
-  navigator.mediaSession.metadata=new MediaMetadata({title:track.title||"Radio",artist:track.artistName||"SunoTo Radio",artwork:track.artworkUrl?[{src:track.artworkUrl,sizes:"512x512"}]:[]});
-  navigator.mediaSession.playbackState="playing";
-  navigator.mediaSession.setActionHandler("play",()=>document.querySelector("#party-radio-player")?.play().catch(()=>{}));
-  navigator.mediaSession.setActionHandler("pause",()=>document.querySelector("#party-radio-player")?.pause());
-  navigator.mediaSession.setActionHandler("nexttrack",()=>partyClient?.send("RADIO_SKIP_VOTE",{}));
+  syncRadioMediaSession(track,{onSkipVote:()=>partyClient?.send("RADIO_SKIP_VOTE",{}),onPlayFailure:()=>showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.blocked,true)});
+}
+function showRadioPlaybackStatus(message,showRetry=false){
+  const status=document.querySelector("#party-radio-playback-status"),retry=document.querySelector("#party-radio-retry");
+  if(status)status.textContent=message;
+  if(retry)retry.hidden=!showRetry;
+}
+function bindRadioPlayback(){
+  const player=document.querySelector("#party-radio-player");
+  if(!player)return;
+  enableRadioPlayerControls(player);
+  const status=document.createElement("p");status.id="party-radio-playback-status";status.className="muted";status.setAttribute("role","status");status.setAttribute("aria-live","polite");status.textContent=RADIO_PLAYBACK_MESSAGES.ready;
+  const retry=document.createElement("button");retry.id="party-radio-retry";retry.type="button";retry.className="btn btn-ghost";retry.textContent="Retry playback";retry.hidden=true;
+  player.after(status,retry);
+  player.addEventListener("playing",()=>{setRadioPlaybackState(navigator.mediaSession,"playing");showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.playing);});
+  player.addEventListener("pause",()=>{if(!player.ended){setRadioPlaybackState(navigator.mediaSession,"paused");showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.paused);}});
+  for(const event of ["waiting","stalled"])player.addEventListener(event,()=>{setRadioPlaybackState(navigator.mediaSession,"none");showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.buffering);});
+  player.addEventListener("error",()=>{setRadioPlaybackState(navigator.mediaSession,"none");showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.error,true);});
+  retry.addEventListener("click",()=>{player.load();player.play().catch(()=>showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.blocked,true));});
 }
 function leavePartyRoom(){stopPartyClient();stopSyntheticRadioReactions();state.partyListenerEstimate=0;partyMessages=[];gameStrokeLog=[];gameGuessLog=[];charadesLog=[];mafiaLog=[];state.partyGame=null;state.partyCharades=null;state.partyMafia=null;state.partyMafiaRole=null;state.partyMafiaInvestigation=null;state.partySnakeLadder=null;state.partyRummy=null;state.partyRummyHand=[];state.partyRummySelectedGroups=[[],[],[],[]];state.partyLudo=null;state.partyTeenPatti=null;state.partyTeenPattiHand=[];state.partyAndarBahar=null;state.partyDragonTiger=null;state.partyBidding=null;state.partyTugOfWar=null;state.partyEliminationReflex=null;state.partyPredictionPool=null;state.partyConnectFour=null;state.partyFreeze=null;state.partyScavenger=null;state.partyScene=null;state.partyRapBattle=null;state.partyRps=null;state.partyTicTacToe=null;state.partyRoom=null;state.partyQueueTracks=[];state.partyNowPlaying="";state.partyVideoParticipants=[];state.partyLocalVideoOn=false;state.partyVideoPublisherIds=[];state.partyMembers=[];state.partyMode="chat";state.partyCurrentTrack=null;state.partyRadioVotes={skipVotes:0,replayVotes:0,totalMembers:1};state.partySeated=false;state.partyIsCoHost=false;state.partySeatLimit=10;state.partySeatedCount=0;state.partySeatRequests=[];updateRadioMediaSession(null);render();}
 function handlePartyEvent(type,payload){
@@ -343,7 +344,7 @@ function handlePartyEvent(type,payload){
   if(type==="PREDICT_STATE"){state.partyPredictionPool=payload;render();}
   if(type==="PREDICT_OVER"){state.partyPredictionPool={...state.partyPredictionPool,status:"game_over",secretNumber:payload.secretNumber,winnerParticipantIds:payload.winnerParticipantIds,guesses:state.partyPredictionPool?.guesses};const names=(payload.winnerParticipantIds||[]).map(id=>id===state.partyParticipantId?"You":peerHandle(id)).join(", ");state.partyMessage=payload.winnerParticipantIds?.length?`The number was ${payload.secretNumber}. ${names} closest, splitting ${Math.floor(payload.pot*0.9)} Credits!`:`The number was ${payload.secretNumber}. Nobody guessed.`;render();}
 }
-async function enterPartyRoom(room,isHost){await ensureAnonymousSession();stopPartyClient();stopSyntheticRadioReactions();partyMessages=[];gameStrokeLog=[];gameGuessLog=[];state.partyGame=null;state.partyRoom={...room,isHost};state.partyListenerEstimate=(room.realListeners||0)+randomRadioListenerCount();state.partyQueueTracks=[];state.partyMessage="";state.partyNowPlaying="";state.partyVideoParticipants=[];state.partyLocalVideoOn=false;state.partyVideoPublisherIds=[];state.partyMembers=[];state.partyMode=room.roomType==="music"||room.roomType==="radio"?"music":"chat";state.partyCurrentTrack=null;state.partyRadioVotes={skipVotes:0,replayVotes:0,totalMembers:1};state.partySeated=Boolean(isHost);state.partyIsCoHost=false;state.partySeatLimit=10;state.partySeatedCount=isHost?1:0;state.partySeatRequests=[];navigate("party");partyClient=new PartyRoomClient({onEvent:handlePartyEvent,onStatus:()=>{},onRemoteAudio:stream=>{const audio=new Audio();audio.srcObject=stream;audio.autoplay=true;audio.play().catch(()=>{});}});partyClient.connect({publicId:room.publicId,accountToken:null,isHost,anonymousToken:state.anonymousSession.token,roomType:room.roomType});}
+async function enterPartyRoom(room,isHost){await ensureAnonymousSession();stopPartyClient();stopSyntheticRadioReactions();partyMessages=[];gameStrokeLog=[];gameGuessLog=[];state.partyGame=null;state.partyRoom={...room,isHost};state.partyListenerEstimate=Math.max(0,Number(room.realListeners)||0);state.partyQueueTracks=[];state.partyMessage="";state.partyNowPlaying="";state.partyVideoParticipants=[];state.partyLocalVideoOn=false;state.partyVideoPublisherIds=[];state.partyMembers=[];state.partyMode=room.roomType==="music"||room.roomType==="radio"?"music":"chat";state.partyCurrentTrack=null;state.partyRadioVotes={skipVotes:0,replayVotes:0,totalMembers:1};state.partySeated=Boolean(isHost);state.partyIsCoHost=false;state.partySeatLimit=10;state.partySeatedCount=isHost?1:0;state.partySeatRequests=[];navigate("party");partyClient=new PartyRoomClient({onEvent:handlePartyEvent,onStatus:()=>{},onRemoteAudio:stream=>{const audio=new Audio();audio.srcObject=stream;audio.autoplay=true;audio.play().catch(()=>{});}});partyClient.connect({publicId:room.publicId,accountToken:null,isHost,anonymousToken:state.anonymousSession.token,roomType:room.roomType});}
 function stopVideoCall(notify=true){videoCall?.stop(notify);videoCall=null;const panel=document.querySelector("#video-panel");if(panel)panel.hidden=true;const local=document.querySelector("#video-local"),remote=document.querySelector("#video-remote");if(local)local.srcObject=null;if(remote)remote.srcObject=null;}
 async function populateVideoDevices(){const cameraSelect=document.querySelector("#video-camera-select"),micSelect=document.querySelector("#video-mic-select");if(!cameraSelect||!micSelect)return;const devices=await navigator.mediaDevices.enumerateDevices().catch(()=>[]);const cameras=devices.filter(device=>device.kind==="videoinput"),mics=devices.filter(device=>device.kind==="audioinput");cameraSelect.innerHTML=cameras.map(device=>`<option value="${device.deviceId}">${device.label||"Camera"}</option>`).join("");micSelect.innerHTML=mics.map(device=>`<option value="${device.deviceId}">${device.label||"Microphone"}</option>`).join("");}
 function startVideoCall(){const panel=document.querySelector("#video-panel");if(panel){panel.hidden=false;panel.classList.remove("video-connected");}videoCall=new VideoCallClient({send:(type,payload)=>realtime?.send(type,payload),onLocalStream:stream=>{const el=document.querySelector("#video-local");if(el)el.srcObject=stream;populateVideoDevices();},onRemoteStream:stream=>{const el=document.querySelector("#video-remote");if(el)el.srcObject=stream;document.querySelector("#video-panel")?.classList.add("video-connected");},onEnded:()=>stopVideoCall(false)});videoCall.start().catch(error=>{chatNotice(error.message||"Could not start video.");stopVideoCall(false);});
@@ -363,7 +364,7 @@ function currentPresenceSection(){const route=routeName();if(route==="chat")retu
 async function maintainPresence(){try{await ensureAnonymousSession();const route=routeName(),status=route==="chat"?"chatting":route==="searching"?"waiting":"online";await heartbeatPresence(state.anonymousSession.token,status,{accountSession:state.accountSession,section:currentPresenceSection()});}catch{}presenceTimer=setTimeout(maintainPresence,20000);}
 async function checkIncomingReconnect(){if(!handlingReconnect){try{await ensureAnonymousSession();const {request}=await pollReconnect({anonymousToken:state.anonymousSession.token});if(request){handlingReconnect=true;const accepted=confirm("A saved favourite wants to reconnect for a new two-minute chat. Accept?");const result=await respondReconnect({anonymousToken:state.anonymousSession.token,requestId:request.requestId,accepted});if(accepted&&result.status==="accepted")await openMatch({status:"matched",sessionId:result.sessionId,peerId:request.initiatorId,reconnect:true});handlingReconnect=false;}}catch{handlingReconnect=false;}}reconnectPollTimer=setTimeout(checkIncomingReconnect,5000);}
 function tickActiveUsers(){state.activeUsersDisplay=randomActiveCount()+(state.publicStats?.realActiveSessions||0);state.registeredUsersDisplay=registeredUserCount(state.publicStats?.registeredUsers||0);const badge=document.querySelector(".active-users");if(badge)badge.innerHTML=`<span class="active-dot"></span>${state.activeUsersDisplay.toLocaleString("en-IN")} online`;else render();activeUsersTimer=setTimeout(tickActiveUsers,3000+Math.random()*4000);}
-function tickRadioListeners(){clearTimeout(radioListenerTimer);if(routeName()!=="party"||state.partyRoom||!state.radioChannels.length){radioListenerTimer=setTimeout(tickRadioListeners,8000);return;}const display={};for(const channel of state.radioChannels)display[channel.publicId]=(channel.realListeners||0)+nextRadioListenerCount(channel.publicId);state.radioListenerDisplay=display;render();radioListenerTimer=setTimeout(tickRadioListeners,8000+Math.random()*4000);}
+function tickRadioListeners(){clearTimeout(radioListenerTimer);if(routeName()!=="party"||state.partyRoom||!state.radioChannels.length){radioListenerTimer=setTimeout(tickRadioListeners,10000);return;}const display={};for(const channel of state.radioChannels)display[channel.publicId]=Math.max(0,Number(channel.realListeners)||0);state.radioListenerDisplay=display;render();radioListenerTimer=setTimeout(tickRadioListeners,10000);}
 async function refreshAdConfig(){try{const snapshot=await loadPublicAdSnapshot();state.featureFlags=snapshot.flags;state.membershipConfig=snapshot.membership||state.membershipConfig;state.adEarningConfig=snapshot.adEarning||state.adEarningConfig;if(snapshot.version!==state.adConfigVersion){state.adConfig=snapshot.config;state.adConfigVersion=snapshot.version;mountAds(document,{config:state.adConfig,registered:Boolean(state.accountSession),isPremium:Boolean(state.accountProfile?.profile?.is_premium),balance:state.wallet?.balance||0,scanCount:routeName()==="party"?0:state.scanCount});}}catch{}adConfigTimer=setTimeout(refreshAdConfig,30000);}
 async function finishChat(reason="ended",destination="history",notifyServer=true){if(finishingChat)return;finishingChat=true;clearInterval(chatTimerInterval);chatTimerInterval=null;chatTimerRemaining=null;clearInterval(podcastTimerInterval);podcastTimerInterval=null;podcastQuestionIndex=0;stopVideoCall(false);signalHandshakeState=resetSignalHandshake();clearTimeout(signalOverlayTimer);if(notifyServer)realtime?.send("SESSION_END");realtime?.stop();realtime=null;await saveCurrentConversation();if(state.anonymousSession&&state.match?.sessionId)await endMatch(state.anonymousSession.token,state.match.sessionId).catch(()=>{});const wasVideoMode=state.match?.mode==="video";state.match=null;pendingMessages.clear();finishingChat=false;if(destination!=="searching")state.chatMode="text";navigate(destination);if(destination==="searching"){if(wasVideoMode)state.chatMode="video";beginSearch();}}
 function renderChatTimer(){if(!Number.isFinite(chatTimerRemaining))return;const timer=document.querySelector("#chat-timer");if(timer)timer.textContent=`${String(Math.floor(chatTimerRemaining/60)).padStart(2,"0")}:${String(chatTimerRemaining%60).padStart(2,"0")}`;}
@@ -701,6 +702,7 @@ function bind(){
     volumeSlider.value=String(Math.round(radioVolume*100));
     volumeSlider.addEventListener("input",()=>{radioVolume=Number(volumeSlider.value)/100;const player=document.querySelector("#party-radio-player");if(player)player.volume=radioVolume;});
   }
+  bindRadioPlayback();
   const radioPanel=document.querySelector("#party-radio-panel");
   if(radioPanel){
     radioPanel.addEventListener("contextmenu",event=>event.preventDefault());

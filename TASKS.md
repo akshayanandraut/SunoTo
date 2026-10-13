@@ -1,5 +1,11 @@
 # TASKS.md — SunoTo backlog, for autonomous task-by-task execution
 
+## 2026-10-14 radio launch correction
+
+- The earlier T-102 note below describing +15,000 padded radio listener figures as an approved decision is superseded by the current owner instruction: do not fabricate listener counts or radio reactions. The app now uses reported connected-listener counts only and only displays reactions actually received from listeners.
+- Player feedback, retry affordance, playback-state-aware Media Session metadata, lock-screen actions, and remote playback enablement are implemented in source but are not yet released or browser-verified. See ROADMAP.md radio launch readiness update.
+- Remaining launch gates: rights-verified curated inventory, focused/final test run per owner, build/deployment acceptance, current Cloudflare access, storage and Supabase verification, permanent redirect configuration, and real-browser audio acceptance.
+
 This file is the complete, current backlog for the SunoTo repo (`C:\pvt\SunoTo`), compiled 2026-09-06 from a
 full audit of `ROADMAP.md`, `QUESTIONS.md`, and the live codebase. It is written so a smaller/cheaper model can
 pick up **one task at a time** and execute it without needing the rest of this conversation's context.
