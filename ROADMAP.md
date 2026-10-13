@@ -5,6 +5,13 @@
 **Audience:** Codex / engineering agents / human reviewers  
 **Last product-design consolidation:** 2026-08-24 (Asia/Kolkata)
 
+## Radio launch readiness update — 2026-10-14
+
+- **Done in source (not yet released):** truthful channel listener displays use backend connected-socket counts only; fabricated +15,000 listener padding and synthetic radio reactions are disabled/removed. Actual listener-submitted reactions remain.
+- **Done in source (not yet released):** player now reports ready/playing/paused/buffering/error states, offers an explicit retry after autoplay or media failure, and only marks Media Session as playing after the audio element emits `playing`. Lock-screen play/pause and next-track-as-skip-vote handlers are wired; remote playback controls are no longer disabled.
+- **Pending:** focused verification, complete licensing and curate a real 60–100 track catalog, verify storage/account configuration, publish Worker/static assets, configure `radio.grasany.com` redirect, and verify actual playback and responsive/background behavior in supported browsers. No test, commit, push, deployment, DNS or database mutation has been performed in this logical slice.
+- **Launch blockers observed this session:** Cloudflare Wrangler authentication is expired; Supabase project access is denied; current `radio.grasany.com` response is HTTP 200 rather than a verified permanent redirect; no track-by-track approved catalog evidence is present. Do not claim production readiness until these are resolved and acceptance evidence is recorded.
+
 ---
 
 # 0. HOW CODEX MUST USE THIS FILE
