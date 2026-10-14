@@ -1,4 +1,7 @@
 name = "sunoto"
+account_id = "d765117089c48868f64cd0d0c682732f"
+workers_dev = true
+routes = [{ pattern = "sunoto.grasany.com", custom_domain = true }]
 main = "src/index.js"
 compatibility_date = "2026-10-02"
 

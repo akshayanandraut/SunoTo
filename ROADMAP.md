@@ -7,10 +7,20 @@
 
 ## Radio launch readiness update — 2026-10-14
 
+### Owner-authorized SunoTo release — 2026-10-14
+
+- Wrangler device authorization completed and `whoami` verified Grasany account `d765117089c48868f64cd0d0c682732f`. The prior environment account override pointed to an inaccessible account. The intended account has no existing `sunoto` Worker; the canonical Wrangler configuration now pins the verified account and `sunoto.grasany.com` custom domain.
+- Dependency junctions still referenced the removed `C:\pvt\SunoTo` folder. pnpm cache corruption and sandbox junction restrictions blocked repair; reinstalled the existing npm lockfile with the bundled Node 24 runtime. No dependency version changes or tests were requested.
+- Owner explicitly authorized making SunoTo live after authentication. Test execution remains deferred by the owner's existing instruction; deployment readiness is limited to build/packaging and live acceptance checks. This is not full product launch acceptance.
+- Pending: deploy and verify the canonical site/API, verify anonymous chat end to end, and record the release revision. Supabase account inventory currently exposes only central Grasany and Akshari projects; SunoTo's dedicated database is not accessible through that connector. Central OIDC, product account authorization, scoped payments, support delivery, heartbeat activation and approved radio catalog remain blocked and must not be presented as operational.
+- Existing unrelated working changes are preserved; release packaging must use committed source rather than silently including those edits.
+
 - **Done in source (not yet released):** truthful channel listener displays use backend connected-socket counts only; fabricated +15,000 listener padding and synthetic radio reactions are disabled/removed. Actual listener-submitted reactions remain.
 - **Done in source (not yet released):** player now reports ready/playing/paused/buffering/error states, offers an explicit retry after autoplay or media failure, and only marks Media Session as playing after the audio element emits `playing`. Lock-screen play/pause and next-track-as-skip-vote handlers are wired; remote playback controls are no longer disabled.
 - **Pending:** focused verification, complete licensing and curate a real 60–100 track catalog, verify storage/account configuration, publish Worker/static assets, configure `radio.grasany.com` redirect, and verify actual playback and responsive/background behavior in supported browsers. No test, commit, push, deployment, DNS or database mutation has been performed in this logical slice.
 - **Launch blockers observed this session:** Cloudflare Wrangler authentication is expired; Supabase project access is denied; current `radio.grasany.com` response is HTTP 200 rather than a verified permanent redirect; no track-by-track approved catalog evidence is present. Do not claim production readiness until these are resolved and acceptance evidence is recorded.
+
+**UI improvement (2026-10-03):** Home hero now has a keyboard-accessible, text-first / video-beta selector that updates the conversation preview and clarifies camera consent. It is responsive, uses reduced-motion-aware transitions, and does not imply video activation or fabricate activity. Focused integration coverage was added. Pending in this slice: run checks/build, verify deploy gate and production target, then commit/push; deployment only with the explicit one-time authorization for this UI slice.
 
 ---
 
