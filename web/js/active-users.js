@@ -1,12 +1,3 @@
-const BASE = 182938;
-const SPREAD = 100000;
-const MAX_STEP = 1500;
-
-let current = null;
-
-export function randomActiveCount(random = Math.random) {
-  if (current === null) current = BASE;
-  const drift = (random() * 2 - 1) * MAX_STEP;
-  current = Math.min(BASE + SPREAD, Math.max(BASE - SPREAD, current + drift));
-  return Math.round(current);
-}
+// Compatibility for the existing caller, which adds the actual backend count.
+// There is no synthetic baseline or random padding to add to that count.
+export function randomActiveCount() { return 0; }
