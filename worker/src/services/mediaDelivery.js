@@ -22,7 +22,7 @@ export async function serveStoredMedia(request, bucket, key) {
   const headers = new Headers({ "content-type": mediaContentType(key.split(".").at(-1)), "cache-control": "private, max-age=60", "content-disposition": "inline", "accept-ranges": "bytes", "x-content-type-options": "nosniff" });
   if (metadata.httpEtag) headers.set("etag", metadata.httpEtag);
   const ifRange = request.headers.get("if-range");
-  const range = mediaByteRange(ifRange && ifRange !== metadata.httpEtag ? null : request.headers.get("range"), metadata.size);
+  const range = request.method === "HEAD" ? null : mediaByteRange(ifRange && ifRange !== metadata.httpEtag ? null : request.headers.get("range"), metadata.size);
   if (range === false) { headers.set("content-range", `bytes */${metadata.size}`); return new Response(null, { status: 416, headers }); }
   headers.set("content-length", String(range ? range.length : metadata.size));
   if (range) headers.set("content-range", `bytes ${range.offset}-${range.offset + range.length - 1}/${metadata.size}`);
