@@ -41,6 +41,7 @@ export function getGrasanyIdentityReadiness(env={}){
   const clientId=env.GRASANY_OIDC_CLIENT_ID;
   const redirectUri=env.GRASANY_OIDC_REDIRECT_URI;
   const encryptionKey=decodeEncryptionKey(env.GRASANY_OIDC_TOKEN_ENCRYPTION_KEY);
+  for(const name of OIDC_VARS.slice(0,3))if(typeof env[name]!=="string"||!env[name].trim())blockers.push(`runtime_${name.toLowerCase()}_missing`);
   if(issuer&&issuer!==GRASANY_OIDC_PACKET.issuer)errors.push("issuer_not_in_central_packet");
   if(clientId&&(!GRASANY_OIDC_PACKET.clientId||clientId!==GRASANY_OIDC_PACKET.clientId))errors.push("client_not_registered");
   if(redirectUri&&!GRASANY_OIDC_PACKET.callbacks.includes(redirectUri))errors.push("callback_not_registered");

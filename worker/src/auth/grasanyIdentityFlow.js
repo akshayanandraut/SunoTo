@@ -7,7 +7,7 @@ const REFRESH_SKEW_MS=60_000;
 const encoder=new TextEncoder();
 const json=(body,status=200,headers={})=>Response.json(body,{status,headers:{"cache-control":"no-store",...headers}});
 function randomOpaqueId(){const bytes=new Uint8Array(32);crypto.getRandomValues(bytes);return btoa(String.fromCharCode(...bytes)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");}
-function cookieValue(request,name=SESSION_COOKIE){const header=request.headers.get("cookie")||"";for(const part of header.split(";")){const index=part.indexOf("=");if(index<0)continue;if(part.slice(0,index).trim()===name)return decodeURIComponent(part.slice(index+1).trim());}return null;}
+function cookieValue(request,name=SESSION_COOKIE){const header=request.headers.get("cookie")||"";let value=null;for(const part of header.split(";")){const index=part.indexOf("=");if(index<0||part.slice(0,index).trim()!==name)continue;if(value!==null)return null;try{value=decodeURIComponent(part.slice(index+1).trim());}catch{return null;}if(!value||value.length>256||/[\s\u0000-\u001f\u007f]/.test(value))return null;}return value;}
 function setSessionCookie(value,maxAge=Math.floor(SESSION_TTL_MS/1000)){return`${SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; Secure; HttpOnly; SameSite=Lax`;}
 function clearSessionCookie(){return`${SESSION_COOKIE}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax`;}
 function isSameOriginMutation(request){const origin=request.headers.get("origin");return Boolean(origin&&origin!=="null"&&origin===new URL(request.url).origin);}
