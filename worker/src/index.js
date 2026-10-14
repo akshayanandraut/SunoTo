@@ -148,6 +148,17 @@ async function buildHealthReport(env, fetcher = fetch) {
 function buildPublicHealth(env, now = new Date()) { return { status: "ok", app: "sunoto", revision: /^[0-9a-f]{40}$/i.test(env.RELEASE_REVISION || "") ? env.RELEASE_REVISION.toLowerCase() : null, timestamp: now.toISOString() }; }
 async function handleRequest(request, env) {
     const url = new URL(request.url);
+    // A public preview must not attempt operations against absent product services.
+    if(env.PUBLIC_PREVIEW==="1"&&url.pathname.startsWith("/api/v1/")){
+      const informational=new Set(["/api/v1/health","/api/v1/identity/status","/api/v1/compliance/public","/api/v1/stats/public"]);
+      if(request.method==="GET"&&url.pathname==="/api/v1/config/public")return Response.json({
+        ads:{...DEFAULT_AD_CONFIG,provider:"disabled"},version:0,
+        flags:Object.fromEntries(Object.keys(DEFAULT_FLAGS).map(key=>[key,false])),
+        membership:DEFAULT_MEMBERSHIP_CONFIG,adEarning:DEFAULT_AD_EARNING_CONFIG,
+        payment:getCentralPaymentReadiness(),availability:{status:"preview",chat:false,accounts:false,payments:false,radio:false}
+      });
+      if(request.method!=="GET"||!informational.has(url.pathname))return Response.json({error:"service_temporarily_unavailable",message:"SunoTo is preparing to open. Please check back soon."},{status:503,headers:{"retry-after":"3600"}});
+    }
     if(url.pathname==="/api/internal/heartbeat")return handleHeartbeatProbe(request,env);
     if(request.method==="GET"&&url.pathname==="/api/v1/identity/status")return Response.json(grasanyAuthHealth(env),{headers:{"cache-control":"no-store"}});
     if(request.method==="GET"&&url.pathname==="/api/v1/auth/grasany/start")return beginGrasanyLogin(request,env);
