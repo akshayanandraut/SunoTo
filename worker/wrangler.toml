@@ -31,7 +31,8 @@ not_found_handling = "404-page"
 run_worker_first = ["/api/*", "/auth/callback"]
 
 [triggers]
-crons = ["*/10 * * * *"]
+# Enable the settlement schedule only after the product database is connected.
+crons = []
 
 [[durable_objects.bindings]]
 name = "CHAT_SESSION"
