@@ -33,6 +33,7 @@ import { FeedbackService } from "./services/FeedbackService.js";
 import { RateLimitShard } from "./durable/RateLimitShard.js";
 import { HeartbeatGuardShard } from "./durable/HeartbeatGuardShard.js";
 import { availableProductFlags } from "./services/productFeatureAvailability.js";
+import { mediaContentType, serveStoredMedia } from "./services/mediaDelivery.js";
 import { handleHeartbeatProbe } from "./services/heartbeatProbe.js";
 import { DailyAccessService } from "./services/DailyAccessService.js";
 import { RadioService } from "./services/RadioService.js";
@@ -282,7 +283,7 @@ async function handleRequest(request, env) {
       const avatarExt=looksLikeImage(avatarBytes);
       if(!avatarExt)return Response.json({error:"invalid_avatar_file"},{status:400});
       const storageKey=`avatars/${user.id}/${crypto.randomUUID()}.${avatarExt}`;
-      await env.RADIO_BUCKET.put(storageKey,avatarBytes,{httpMetadata:{contentType:avatarFile.type||"image/jpeg"}});
+      await env.RADIO_BUCKET.put(storageKey,avatarBytes,{httpMetadata:{contentType:mediaContentType(avatarExt)}});
       const response=await supabaseRest(env,user,"/rpc/set_avatar_url",{method:"POST",body:JSON.stringify({desired_avatar_url:`/api/v1/radio-media/${storageKey}`})});
       if(!response.ok){await env.RADIO_BUCKET.delete(storageKey).catch(()=>{});const error=await response.json().catch(()=>({}));const message=error.message||"avatar_update_failed";return Response.json({error:message},{status:message==="verification_required"?403:400});}
       return Response.json((await response.json())[0]||null);
@@ -614,10 +615,10 @@ const flagsBlocked=await requireFlags(env,["live_world_enabled"]);if(flagsBlocke
         const artworkExt=looksLikeImage(artworkBytes);
         if(!artworkExt)return Response.json({error:"invalid_artwork_file"},{status:400});
         artworkKey=`radio/${roomPublicId}/${crypto.randomUUID()}.${artworkExt}`;
-        await env.RADIO_BUCKET.put(artworkKey,artworkBytes,{httpMetadata:{contentType:artworkFile.type||"image/jpeg"}});
+        await env.RADIO_BUCKET.put(artworkKey,artworkBytes,{httpMetadata:{contentType:mediaContentType(artworkExt)}});
       }
       const storageKey=`radio/${roomPublicId}/${crypto.randomUUID()}.${audioExt}`;
-      await env.RADIO_BUCKET.put(storageKey,audioBytes,{httpMetadata:{contentType:audioFile.type||"audio/mpeg"}});
+      await env.RADIO_BUCKET.put(storageKey,audioBytes,{httpMetadata:{contentType:mediaContentType(audioExt)}});
       const service=new RadioService({url:env.SUPABASE_URL,serviceKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher:env.FETCHER||fetch});
       try{
         const result=await service.rpc("admin_submit_radio_track",{target_room_public_id:roomPublicId,target_title:title,target_artist_name:artistName||null,target_storage_key:storageKey,target_artwork_key:artworkKey,target_duration_seconds:durationSeconds,target_license:license,target_attribution_text:attributionText});
@@ -659,30 +660,25 @@ const flagsBlocked=await requireFlags(env,["live_world_enabled"]);if(flagsBlocke
         const artworkExt=looksLikeImage(artworkBytes);
         if(!artworkExt)return Response.json({error:"invalid_artwork_file"},{status:400});
         artworkKey=`radio/${radioQueueMatch[1]}/${crypto.randomUUID()}.${artworkExt}`;
-        await env.RADIO_BUCKET.put(artworkKey,artworkBytes,{httpMetadata:{contentType:artworkFile.type||"image/jpeg"}});
+        await env.RADIO_BUCKET.put(artworkKey,artworkBytes,{httpMetadata:{contentType:mediaContentType(artworkExt)}});
       }
       const audioExt=looksLikeAudio(audioBytes);
       const storageKey=`radio/${radioQueueMatch[1]}/${crypto.randomUUID()}.${audioExt}`;
-      await env.RADIO_BUCKET.put(storageKey,audioBytes,{httpMetadata:{contentType:audioFile.type||"audio/mpeg"}});
+      await env.RADIO_BUCKET.put(storageKey,audioBytes,{httpMetadata:{contentType:mediaContentType(audioExt)}});
       const response=await supabaseRest(env,user,"/rpc/submit_radio_track",{method:"POST",body:JSON.stringify({target_room_public_id:radioQueueMatch[1],target_title:title,target_artist_name:artistName||null,target_storage_key:storageKey,target_artwork_key:artworkKey,target_duration_seconds:durationSeconds,target_rights_attested:true,target_listener_message:listenerMessage||null})});
       if(!response.ok){await env.RADIO_BUCKET.delete(storageKey).catch(()=>{});if(artworkKey)await env.RADIO_BUCKET.delete(artworkKey).catch(()=>{});const error=await response.json().catch(()=>({}));return Response.json({error:error.message||"radio_submit_failed"},{status:400});}
       return Response.json((await response.json())[0]||null);
     }
     const radioMediaMatch=url.pathname.match(/^\/api\/v1\/radio-media\/((?:radio\/[0-9a-fA-F-]{36}|avatars\/[0-9a-fA-F-]{36})\/[a-zA-Z0-9-]+\.[a-z0-9]{2,5})$/);
-    if(request.method==="GET"&&radioMediaMatch){
+    if(["GET","HEAD"].includes(request.method)&&radioMediaMatch){
       const storageBlocked=requireMediaStorage(env);if(storageBlocked)return storageBlocked;
       const key=radioMediaMatch[1];
-      if(key.startsWith("radio/")&&env.ANON_SESSION_SECRET){
+      if(key.startsWith("radio/")){
+        if(!env.ANON_SESSION_SECRET)return Response.json({error:"media_signing_unavailable"},{status:503});
         const claims=await verifyAnonymousToken(url.searchParams.get("t"),env.ANON_SESSION_SECRET);
         if(!claims||claims.kind!=="radio-media"||claims.sub!==key)return Response.json({error:"expired_or_invalid_media_link"},{status:403});
       }
-      const rangeHeader=request.headers.get("range"),rangeMatch=rangeHeader?.match(/^bytes=(\d+)-(\d*)$/);
-      const r2Range=rangeMatch?{offset:Number(rangeMatch[1]),length:rangeMatch[2]?Number(rangeMatch[2])-Number(rangeMatch[1])+1:undefined}:undefined;
-      const object=await env.RADIO_BUCKET.get(key,r2Range?{range:r2Range}:{});
-      if(!object)return Response.json({error:"not_found"},{status:404});
-      const headers={"content-type":object.httpMetadata?.contentType||"application/octet-stream","cache-control":"private, max-age=60","content-disposition":"inline","accept-ranges":"bytes"};
-      if(r2Range&&object.range){headers["content-range"]=`bytes ${object.range.offset}-${object.range.offset+object.range.length-1}/${object.size}`;return new Response(object.body,{status:206,headers});}
-      return new Response(object.body,{headers});
+      return serveStoredMedia(request,env.RADIO_BUCKET,key);
     }
     if(request.method==="GET"&&url.pathname==="/api/v1/forums"){
       const flagsBlocked=await requireFlags(env,["forums_enabled"]);if(flagsBlocked)return flagsBlocked;

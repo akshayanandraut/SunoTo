@@ -1,0 +1,13 @@
+name = "sunoto-radio-redirect"
+account_id = "d765117089c48868f64cd0d0c682732f"
+main = "src/radioRedirect.js"
+compatibility_date = "2026-10-14"
+workers_dev = false
+routes = [{ pattern = "radio.grasany.com", custom_domain = true }]
+
+[observability]
+enabled = true
+[observability.logs]
+enabled = true
+[observability.traces]
+enabled = true
