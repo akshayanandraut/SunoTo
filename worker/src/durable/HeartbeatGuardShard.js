@@ -19,8 +19,9 @@ export class HeartbeatGuardShard {
     const guard=sql.exec("SELECT last_claimed_at FROM probe_guard WHERE id = 1").one();
     if(now-guard.last_claimed_at<60_000)return new Response(null,{status:429,headers:{"retry-after":String(Math.ceil((60_000-(now-guard.last_claimed_at))/1000))}});
     if(sql.exec("SELECT count(*) AS total FROM probe_nonces").one().total>=12)return new Response(null,{status:429,headers:{"retry-after":"60"}});
-    const inserted=sql.exec("INSERT OR IGNORE INTO probe_nonces (nonce, expires_at) VALUES (?, ?)",payload.nonce,now+600_000);
-    if(inserted.rowsWritten!==1)return new Response(null,{status:409});
+    // rowsWritten includes index maintenance; RETURNING counts logical inserts.
+    const inserted=sql.exec("INSERT OR IGNORE INTO probe_nonces (nonce, expires_at) VALUES (?, ?) RETURNING nonce",payload.nonce,now+600_000).toArray();
+    if(inserted.length!==1)return new Response(null,{status:409});
     sql.exec("UPDATE probe_guard SET last_claimed_at = ? WHERE id = 1",now);
     return new Response(null,{status:204});
   }
