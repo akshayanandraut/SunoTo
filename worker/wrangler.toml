@@ -8,6 +8,7 @@ compatibility_date = "2026-10-02"
 [vars]
 PUBLIC_PREVIEW = "0"
 ALLOWED_ORIGIN = "https://sunoto.grasany.com"
+HEARTBEAT_DB_ENABLED = "1"
 
 # Production logs and traces are enabled for launch investigation. No request
 # content, central tokens, payment data, or chat messages may be logged.

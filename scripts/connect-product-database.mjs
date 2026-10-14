@@ -29,7 +29,10 @@ const secrets = {
   SUPABASE_URL: url,
   SUPABASE_PUBLISHABLE_KEY: publicKey,
   SUPABASE_SERVICE_ROLE_KEY: serviceKey,
-  ANON_SESSION_SECRET: previous.ANON_SESSION_SECRET || randomBytes(48).toString("base64url")
+  ANON_SESSION_SECRET: previous.ANON_SESSION_SECRET || randomBytes(48).toString("base64url"),
+  ...(previous.STATUSNERVE_HEARTBEAT_KEY || process.argv.includes("--heartbeat") ? {
+    STATUSNERVE_HEARTBEAT_KEY: previous.STATUSNERVE_HEARTBEAT_KEY || randomBytes(48).toString("base64url")
+  } : {})
 };
 await mkdir(new URL("../work/", import.meta.url), { recursive: true });
 await writeFile(runtimePath, JSON.stringify(secrets), { mode: 0o600 });
