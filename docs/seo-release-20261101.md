@@ -1,0 +1,9 @@
+# SunoTo isolated SEO candidate
+
+Original project: Cloudflare Worker `sunoto`, account `d765117089c48868f64cd0d0c682732f`, custom domain `sunoto.grasany.com`; not a new Pages project. Original live frontend/API revision verified on 2026-11-01: `13861ce329b929b58d14365ccc3d264ba5ed3b0a`. Prior recorded Cloudflare version: `52f46bc6-dc31-41d4-92a8-6926a48f9b51` (version ID not freshly queried).
+
+Candidate branch `seo/sunoto-20261101` derives directly from that live source, not current held main. Canonical dirty work remains untouched. Changed production paths: `web/index.html`, `web/public/robots.txt`, `web/public/sitemap.xml`. Documentation: `ROADMAP.md`, this file. Focused check: `test/seo-public.test.js`.
+
+Normal `npm run build` passed using installed Vite 7.3.6. Exact-origin production CSP rendering passed. Seven focused checks passed across built SEO/public output, private crawl exclusions, central auth surface, production headers and fail-closed production configuration. Sitemap contains only the canonical public root; no invented lastmod or private URLs. Broken unbundled social image references were removed rather than shipped. Robots exclusions are not access control.
+
+Local runtime acceptance is blocked: installed workerd supports compatibility dates only through 2026-08-27 but original project requires 2026-10-02. No compatibility downgrade or dependency upgrade was made. Therefore real local HTTP public/private/unknown-path status checks are not asserted; only unchanged `404-page` configuration was checked. Runtime HTTP/404 acceptance remains a release gate. Full production readiness is not asserted: identity/payment provisioning gates remain closed and unchanged. No deployment or Search Console submission performed. One coordinated original-project release requires root review/authorization.
