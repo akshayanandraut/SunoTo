@@ -1,5 +1,9 @@
 # SunoTo — Codex-Ready Product & Engineering Roadmap
 
+## SEO-only candidate — 2026-11-01
+
+Prepared from verified live frontend/API revision `13861ce329b929b58d14365ccc3d264ba5ed3b0a`, excluding subsequent held native work and canonical checkout dirty edits. Adds homepage canonical/robots/absolute social image metadata, visible public product/privacy links and root-only XML sitemap. API/auth/admin remain intentionally excluded from crawling; robots is not access control and existing authorization/404 behavior is unchanged. No build, deployment, indexing promise or Search Console submission. Candidate is reserved for one coordinated release, not a main-branch bypass of held work.
+
 **Status:** Product decisions locked for MVP  
 **Primary goal:** Launch a lightweight, revenue-capable, India-first anonymous/random text-chat website quickly, then iterate from real usage data.  
 **Audience:** Codex / engineering agents / human reviewers  
