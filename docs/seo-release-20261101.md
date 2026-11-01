@@ -1,5 +1,9 @@
 # SunoTo isolated SEO candidate
 
+## Updated private indexing gate
+
+Supersedes the runtime blocker recorded below: isolated official Wrangler 4.156.0 / workerd 1.20261023.1 successfully runs the unchanged 2026-10-02 compatibility date. Added only `X-Robots-Tag: noindex, nofollow` at the shared non-WebSocket response boundary for `/api` and `/auth` paths. Actual local HTTP confirms root 200 HTML, robots 200 text/plain, sitemap 200 application/xml, unknown path 404, private session/wallet/callback 503 with noindex and unchanged denial bodies/cache, and health 200 with noindex. Nine focused tests pass, including explicit preservation of success/redirect/denial/error statuses, body, Location, Set-Cookie and custom headers. No live identity/provider mutation or deploy. Additional changed paths: `worker/src/index.js`, `test/seo-worker-http.test.js`. This corrected candidate needs a new exact-SHA review; old publication approval is not reused.
+
 Original project: Cloudflare Worker `sunoto`, account `d765117089c48868f64cd0d0c682732f`, custom domain `sunoto.grasany.com`; not a new Pages project. Original live frontend/API revision verified on 2026-11-01: `13861ce329b929b58d14365ccc3d264ba5ed3b0a`. Prior recorded Cloudflare version: `52f46bc6-dc31-41d4-92a8-6926a48f9b51` (version ID not freshly queried).
 
 Candidate branch `seo/sunoto-20261101` derives directly from that live source, not current held main. Canonical dirty work remains untouched. Changed production paths: `web/index.html`, `web/public/robots.txt`, `web/public/sitemap.xml`. Documentation: `ROADMAP.md`, this file. Focused check: `test/seo-public.test.js`.
