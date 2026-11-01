@@ -1,0 +1,55 @@
+/* A listening surface, scoped away from chat, wallet and account views. */
+#party-radio-panel {
+  --radio-ink: #fff5e2;
+  --radio-muted: #c9baa4;
+  --radio-accent: #f6bd60;
+  color: var(--radio-ink);
+  background: radial-gradient(ellipse at top right, #5a3826 0, transparent 62%), #181b1b;
+  border: 1px solid #77634b;
+  border-radius: 24px;
+  padding: clamp(18px, 4vw, 36px);
+  margin-block: 20px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#party-radio-panel > .field > div:first-child { gap: 22px !important; }
+#party-radio-panel > .field > div:first-child > div { min-width: 0; }
+#party-radio-panel strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.5rem, 4vw, 2.6rem);
+  font-weight: 500;
+  line-height: 1.12;
+  letter-spacing: -.025em;
+}
+#party-radio-panel img {
+  width: clamp(88px, 18vw, 160px) !important;
+  height: clamp(88px, 18vw, 160px) !important;
+  flex: 0 0 auto;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 30px #0005;
+}
+#party-radio-panel .muted { color: var(--radio-muted); }
+#party-radio-player { display: block; min-height: 54px; color-scheme: dark; }
+#party-radio-panel .inline-form { flex-wrap: wrap; }
+#party-radio-panel .btn {
+  min-height: 44px;
+  color: var(--radio-ink);
+  border: 1px solid #8f795d;
+  background: #ffffff08;
+}
+#party-radio-panel .btn:hover { background: #f6bd601a; border-color: var(--radio-accent); }
+#party-radio-panel :focus-visible { outline: 3px solid var(--radio-accent); outline-offset: 4px; }
+#party-radio-volume { accent-color: var(--radio-accent); min-height: 44px; }
+#party-radio-playback-status { min-height: 1.5em; font-size: .9rem; }
+#party-radio-queue { border-top: 1px solid #77634b; padding-top: 20px; }
+#party-radio-queue .saved-item { color: var(--radio-ink); background: transparent; border-color: #77634b; }
+#party-radio-panel .empty { padding: 32px 8px; }
+@media (max-width: 480px) {
+  #party-radio-panel { border-radius: 18px; padding: 18px 14px; }
+  #party-radio-panel > .field > div:first-child { align-items: flex-start !important; gap: 14px !important; }
+  #party-radio-panel .inline-form > .btn { flex: 1 1 auto; }
+  #party-radio-panel [data-radio-reaction] { min-width: 48px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #party-radio-panel *, #party-radio-panel *::before, #party-radio-panel *::after { animation: none !important; transition: none !important; }
+}

@@ -2,7 +2,7 @@ export const RADIO_PLAYBACK_MESSAGES = Object.freeze({
   ready: "Ready to play.",
   playing: "Playing live radio.",
   paused: "Radio paused.",
-  buffering: "Reconnecting to the audio stream…",
+  buffering: "Buffering audio. Waiting for the stream…",
   blocked: "Playback did not start. Press Play to try again.",
   error: "This audio could not be played. Check your connection and retry.",
 });
@@ -23,7 +23,7 @@ export function syncRadioMediaSession(track, {
   if (!track) {
     try { mediaSession.metadata = null; } catch {}
     setRadioPlaybackState(mediaSession, "none");
-    for (const action of ["play", "pause", "nexttrack"]) {
+    for (const action of ["play", "pause", "stop", "nexttrack", "previoustrack", "seekbackward", "seekforward", "seekto"]) {
       try { mediaSession.setActionHandler(action, null); } catch {}
     }
     return;
@@ -40,9 +40,15 @@ export function syncRadioMediaSession(track, {
   // Metadata can arrive before the audio is playable; only media events mark it playing.
   setRadioPlaybackState(mediaSession, "none");
   const handlers = {
-    play: () => { const player = getPlayer(); if (player) player.play().catch(onPlayFailure); },
+    play: () => { const player = getPlayer(); if (!player) return; try { Promise.resolve(player.play()).catch(onPlayFailure); } catch (error) { onPlayFailure(error); } },
     pause: () => getPlayer()?.pause(),
+    stop: () => { getPlayer()?.pause(); setRadioPlaybackState(mediaSession, "paused"); },
     nexttrack: onSkipVote,
+    // Shared radio timelines cannot be independently rewound or fast-forwarded.
+    previoustrack: null,
+    seekbackward: null,
+    seekforward: null,
+    seekto: null,
   };
   for (const [action, handler] of Object.entries(handlers)) {
     try { mediaSession.setActionHandler(action, handler); } catch {}
