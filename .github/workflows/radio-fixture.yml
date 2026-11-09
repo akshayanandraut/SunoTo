@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 env:
-  FIXTURE_SHA: 7844088a1798ac0fca04f2cd0cd7dd1176dfc191
+  FIXTURE_SHA: f59b1275929a393343a2e73965b69d1d0c52659a
 jobs:
   fixture:
     runs-on: ubuntu-24.04
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: 7844088a1798ac0fca04f2cd0cd7dd1176dfc191
+          ref: f59b1275929a393343a2e73965b69d1d0c52659a
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -72,6 +72,7 @@ jobs:
           assert.equal((await completeGrasanyCallback(req(name+'='+state),{})).status,503);
           console.log('OIDC state requires matching initiating-browser cookie; production readiness remains fail-closed.');
           JS
+      - run: node --test test/oidc-controlled-lifecycle.test.js
       - run: npm ci --no-audit --no-fund
       - run: npm run build
         env:
