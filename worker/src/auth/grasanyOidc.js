@@ -1,6 +1,6 @@
 import { GRASANY_REQUESTED_SCOPES } from "../services/grasanyOidcTokenContract.js";
 
-// Central packet schemaVersion 2, commit 8d6f18a9000eb736a11ecc789a097cab7bc0f7d9.
+// Central registration packet: ff3c7ac4c2874538ac9cb2a92a65d098c17b82fc.
 // Keep these values fail-closed until a regenerated packet provisions each item.
 export const GRASANY_OIDC_PACKET=Object.freeze({
   enabled:false,
@@ -35,7 +35,7 @@ function decodeEncryptionKey(value){
   try{const bytes=fromBase64Url(value);return bytes.byteLength===32?bytes:null;}catch{return null;}
 }
 
-export function getGrasanyIdentityReadiness(env={}){
+export function getGrasanyIdentityReadiness(env={}, {acceptanceOnly=false}={}){
   const errors=[],blockers=[];
   const issuer=env.GRASANY_OIDC_ISSUER;
   const clientId=env.GRASANY_OIDC_CLIENT_ID;
@@ -46,10 +46,10 @@ export function getGrasanyIdentityReadiness(env={}){
   if(clientId&&(!GRASANY_OIDC_PACKET.clientId||clientId!==GRASANY_OIDC_PACKET.clientId))errors.push("client_not_registered");
   if(redirectUri&&!GRASANY_OIDC_PACKET.callbacks.includes(redirectUri))errors.push("callback_not_registered");
   if(env.GRASANY_OIDC_TOKEN_ENCRYPTION_KEY&&!encryptionKey)errors.push("token_encryption_key_invalid");
-  if(!GRASANY_OIDC_PACKET.enabled)blockers.push("central_oidc_disabled");
+  if(!acceptanceOnly&&!GRASANY_OIDC_PACKET.enabled)blockers.push("central_oidc_disabled");
   if(!GRASANY_OIDC_PACKET.clientId)blockers.push("client_registration_missing");
   if(!GRASANY_OIDC_PACKET.callbacks.length)blockers.push("callback_not_registered");
-  for(const acceptance of REQUIRED_ACCEPTANCE)if(GRASANY_OIDC_PACKET.acceptance[acceptance]!==true)blockers.push(`acceptance_${acceptance}_pending`);
+  for(const acceptance of REQUIRED_ACCEPTANCE)if(!acceptanceOnly&&GRASANY_OIDC_PACKET.acceptance[acceptance]!==true)blockers.push(`acceptance_${acceptance}_pending`);
   if(!env.IDENTITY_SESSIONS)blockers.push("identity_session_store_missing");
   if(!encryptionKey)blockers.push("token_encryption_key_missing");
   return Object.freeze({
@@ -57,7 +57,7 @@ export function getGrasanyIdentityReadiness(env={}){
     status:errors.length?"misconfigured":blockers.length?"not_configured":"ready",
     provider:"grasany_oidc",
     packetSchemaVersion:2,
-    packetCommit:"8d6f18a9000eb736a11ecc789a097cab7bc0f7d9",
+    packetCommit:"ff3c7ac4c2874538ac9cb2a92a65d098c17b82fc",
     issuer:GRASANY_OIDC_PACKET.issuer,
     scopes:GRASANY_OIDC_PACKET.scopes,
     errors:Object.freeze(errors),
