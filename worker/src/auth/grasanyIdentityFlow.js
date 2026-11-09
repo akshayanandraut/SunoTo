@@ -2,12 +2,25 @@ import { GRASANY_OIDC_PACKET, createOidcTransaction, createPkceChallenge, decryp
 import { identityStore } from "./identityStore.js";
 
 const SESSION_COOKIE="__Host-sunoto_session";
+const LOGIN_COOKIE="__Host-sunoto_oidc";
+const OPAQUE_ID=/^[A-Za-z0-9_-]{43}$/;
 const SESSION_TTL_MS=8*60*60*1000;
 const REFRESH_SKEW_MS=60_000;
 const encoder=new TextEncoder();
 const json=(body,status=200,headers={})=>Response.json(body,{status,headers:{"cache-control":"no-store",...headers}});
 function randomOpaqueId(){const bytes=new Uint8Array(32);crypto.getRandomValues(bytes);return btoa(String.fromCharCode(...bytes)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");}
-function cookieValue(request,name=SESSION_COOKIE){const header=request.headers.get("cookie")||"";for(const part of header.split(";")){const index=part.indexOf("=");if(index<0)continue;if(part.slice(0,index).trim()===name)return decodeURIComponent(part.slice(index+1).trim());}return null;}
+function cookieValue(request,name=SESSION_COOKIE){
+  let found=null;
+  for(const part of (request.headers.get("cookie")||"").split(";")){
+    const index=part.indexOf("=");if(index<0||part.slice(0,index).trim()!==name)continue;
+    const value=part.slice(index+1).trim();
+    if(found!==null||!OPAQUE_ID.test(value))return null;
+    found=value;
+  }
+  return found;
+}
+export function isBrowserBoundOidcState(request,state){return OPAQUE_ID.test(state??"")&&sameSecret(cookieValue(request,LOGIN_COOKIE),state);}
+function loginCookie(value,maxAge=600){return `${LOGIN_COOKIE}=${value}; Path=/; Max-Age=${maxAge}; Secure; HttpOnly; SameSite=Lax`;}
 function setSessionCookie(value,maxAge=Math.floor(SESSION_TTL_MS/1000)){return`${SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; Secure; HttpOnly; SameSite=Lax`;}
 function clearSessionCookie(){return`${SESSION_COOKIE}=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax`;}
 function isSameOriginMutation(request){const origin=request.headers.get("origin");return Boolean(origin&&origin!=="null"&&origin===new URL(request.url).origin);}
@@ -29,38 +42,41 @@ export async function beginGrasanyLogin(request,env,{fetcher=env.IDENTITY_FETCHE
   if(stored.status>=400)return identityUnavailableResponse();
   const authorize=new URL(metadata.authorizationEndpoint);
   for(const [key,value] of Object.entries({client_id:config.clientId,redirect_uri:config.redirectUri,response_type:"code",scope:GRASANY_OIDC_PACKET.scopes.join(" "),state:transaction.state,nonce:transaction.nonce,code_challenge:challenge,code_challenge_method:"S256"}))authorize.searchParams.set(key,value);
-  return Response.redirect(authorize.toString(),302);
+  return new Response(null,{status:302,headers:{location:authorize.toString(),"set-cookie":loginCookie(transaction.state),"cache-control":"no-store"}});
 }
 
 export async function completeGrasanyCallback(request,env,{fetcher=env.IDENTITY_FETCHER||env.FETCHER||fetch,now=Date.now()}={}){
   const readiness=getGrasanyIdentityReadiness(env);if(!readiness.enabled)return identityUnavailableResponse();
   const url=new URL(request.url),codes=url.searchParams.getAll("code"),states=url.searchParams.getAll("state"),errors=url.searchParams.getAll("error");
-  if(codes.length!==1||states.length!==1||errors.length>1||errors.length)return json({error:"identity_callback_invalid"},400,{"set-cookie":clearSessionCookie()});
-  const [code]=codes,[state]=states;if(!code||code.length>4096||!state||state.length>128)return json({error:"identity_callback_invalid"},400,{"set-cookie":clearSessionCookie()});
+  if(codes.length!==1||states.length!==1||errors.length>1||errors.length)return json({error:"identity_callback_invalid"},400);
+  const [code]=codes,[state]=states;if(!code||code.length>4096||!isBrowserBoundOidcState(request,state))return json({error:"identity_callback_invalid"},400);
   const pendingResult=await identityStore.consumePending(env,state),pendingEnvelope=rowRecord(pendingResult);
-  if(!pendingEnvelope?.encrypted||pendingEnvelope.expiresAt<=now)return json({error:"identity_transaction_expired"},400,{"set-cookie":clearSessionCookie()});
+  if(!pendingEnvelope?.encrypted||pendingEnvelope.expiresAt<=now)return json({error:"identity_transaction_expired"},400);
   let transaction;
-  try{transaction=await decryptIdentityTokens(pendingEnvelope.encrypted,env.GRASANY_OIDC_TOKEN_ENCRYPTION_KEY);}catch{return json({error:"identity_transaction_invalid"},400,{"set-cookie":clearSessionCookie()});}
-  if(transaction.state!==state||now-transaction.createdAt>10*60*1000)return json({error:"identity_transaction_expired"},400,{"set-cookie":clearSessionCookie()});
+  try{transaction=await decryptIdentityTokens(pendingEnvelope.encrypted,env.GRASANY_OIDC_TOKEN_ENCRYPTION_KEY);}catch{return json({error:"identity_transaction_invalid"},400);}
+  if(transaction.state!==state||now-transaction.createdAt>10*60*1000)return json({error:"identity_transaction_expired"},400);
   const config=runtimeConfig(env);let metadata;
-  try{metadata=await fetchOidcMetadata(fetcher);}catch{return json({error:"identity_provider_unavailable"},503,{"set-cookie":clearSessionCookie()});}
+  try{metadata=await fetchOidcMetadata(fetcher);}catch{return json({error:"identity_provider_unavailable"},503);}
   const body=new URLSearchParams({grant_type:"authorization_code",code,client_id:config.clientId,redirect_uri:config.redirectUri,code_verifier:transaction.verifier});let tokenResponse;
-  try{tokenResponse=await fetcher(metadata.tokenEndpoint,{method:"POST",headers:tokenRequestHeaders(),body});}catch{return json({error:"identity_provider_unavailable"},503,{"set-cookie":clearSessionCookie()});}
-  if(!tokenResponse.ok)return json({error:"identity_code_exchange_failed"},401,{"set-cookie":clearSessionCookie()});
+  try{tokenResponse=await fetcher(metadata.tokenEndpoint,{method:"POST",headers:tokenRequestHeaders(),body});}catch{return json({error:"identity_provider_unavailable"},503);}
+  if(!tokenResponse.ok)return json({error:"identity_code_exchange_failed"},401);
   const tokenPayload=await tokenResponse.json().catch(()=>null);let tokens;
-  try{tokens=validateOidcInitialTokenResponse(tokenPayload);}catch{return json({error:"identity_token_response_invalid"},401,{"set-cookie":clearSessionCookie()});}
-  let jwksResponse;try{jwksResponse=await fetcher(metadata.jwksUri,{headers:{accept:"application/json"}});}catch{return json({error:"identity_provider_unavailable"},503,{"set-cookie":clearSessionCookie()});}
-  if(!jwksResponse.ok)return json({error:"identity_signing_keys_unavailable"},503,{"set-cookie":clearSessionCookie()});
-  let verified;try{verified=await verifyGrasanyIdToken(tokens.idToken,{jwks:await jwksResponse.json().catch(()=>null),issuer:metadata.issuer,audience:config.clientId,nonce:transaction.nonce});}catch{return json({error:"identity_token_validation_failed"},401,{"set-cookie":clearSessionCookie()});}
+  try{tokens=validateOidcInitialTokenResponse(tokenPayload);}catch{return json({error:"identity_token_response_invalid"},401);}
+  let jwksResponse;try{jwksResponse=await fetcher(metadata.jwksUri,{headers:{accept:"application/json"}});}catch{return json({error:"identity_provider_unavailable"},503);}
+  if(!jwksResponse.ok)return json({error:"identity_signing_keys_unavailable"},503);
+  let verified;try{verified=await verifyGrasanyIdToken(tokens.idToken,{jwks:await jwksResponse.json().catch(()=>null),issuer:metadata.issuer,audience:config.clientId,nonce:transaction.nonce});}catch{return json({error:"identity_token_validation_failed"},401);}
   const sessionId=randomOpaqueId(),csrfToken=randomOpaqueId(),record={
-    version:1,subject:verified.subject,email:typeof verified.claims.email==="string"?verified.claims.email:null,
+    version:1,issuer:metadata.issuer,subject:verified.subject,email:typeof verified.claims.email==="string"?verified.claims.email:null,
     emailVerified:verified.claims.email_verified===true,centralAdmin:false,csrfToken,tokenEnvelope:await encryptIdentityTokens(tokens,config.encryptionKey),
     createdAt:now,accessExpiresAt:tokens.expiresAt,expiresAt:now+SESSION_TTL_MS
   };
   const saved=await identityStore.createSession(env,sessionId,record);
   if(saved.status>=400)return identityUnavailableResponse();
   const destination=new URL(safeIdentityReturnTo(transaction.returnTo),url.origin);
-  return new Response(null,{status:303,headers:{location:destination.toString(),"set-cookie":setSessionCookie(sessionId),"cache-control":"no-store"}});
+  const headers=new Headers({location:destination.toString(),"cache-control":"no-store"});
+  headers.append("set-cookie",setSessionCookie(sessionId));
+  headers.append("set-cookie",loginCookie("",0));
+  return new Response(null,{status:303,headers});
 }
 
 async function refreshSessionTokens(request,env,sessionId,row,record,{fetcher=env.IDENTITY_FETCHER||env.FETCHER||fetch,now=Date.now()}={}){
