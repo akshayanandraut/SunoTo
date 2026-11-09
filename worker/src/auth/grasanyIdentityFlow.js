@@ -124,7 +124,7 @@ export async function getGrasanyPrincipal(request,env,options={}){
   if(record.accessExpiresAt<=now+REFRESH_SKEW_MS){
     const refreshed=await refreshSessionTokens(request,env,sessionId,row,record,{...options,now});if(refreshed.response)return{error:"identity_session_unavailable",response:refreshed.response};active=refreshed.record;
   }
-  return{subject:active.subject,claims:{sub:active.subject,email:active.email,email_verified:active.emailVerified},csrfToken:active.csrfToken,sessionId};
+  return{issuer:active.issuer,subject:active.subject,claims:{sub:active.subject,email:active.email,email_verified:active.emailVerified},csrfToken:active.csrfToken,sessionId};
 }
 
 export async function verifyIdentityCsrf(request,env){
@@ -134,14 +134,20 @@ export async function verifyIdentityCsrf(request,env){
 }
 
 export async function logoutGrasanySession(request,env){
-  if(!isSameOriginMutation(request))return json({error:"origin_not_allowed"},403,{"set-cookie":clearSessionCookie()});
+  if(!isSameOriginMutation(request))return json({error:"origin_not_allowed"},403);
   const sessionId=cookieValue(request);
   if(sessionId){
-    if(getGrasanyIdentityReadiness(env).enabled&&!await verifyIdentityCsrf(request,env))return json({error:"csrf_validation_failed"},403);
-    try{await identityStore.deleteSession(env,sessionId);}catch{}
+    try{
+      const row=await identityStore.getSession(env,sessionId);
+      const record=rowRecord(row);
+      // Logout must not refresh central tokens or report success if deletion fails.
+      if(row.status===200&&(!record||!sameSecret(request.headers.get("x-csrf-token"),record.csrfToken)))return json({error:"csrf_validation_failed"},403);
+      if(row.status!==404&&row.status!==410){
+        const deleted=await identityStore.deleteSession(env,sessionId);
+        if(![200,204,404,410].includes(deleted.status))return json({error:"identity_logout_unavailable"},503);
+      }
+    }catch{return json({error:"identity_logout_unavailable"},503);}
   }
-  // The central packet has no revocation endpoint. Destroy local session state
-  // and clear the cookie; do not guess an upstream revocation URL.
   return new Response(null,{status:204,headers:{"set-cookie":clearSessionCookie(),"cache-control":"no-store"}});
 }
 
