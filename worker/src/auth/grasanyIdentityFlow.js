@@ -29,10 +29,27 @@ function rowRecord(result){if(!result?.payload)return null;try{return JSON.parse
 function tokenRequestHeaders(){return{"content-type":"application/x-www-form-urlencoded","accept":"application/json"};}
 function runtimeConfig(env){return{issuer:env.GRASANY_OIDC_ISSUER,clientId:env.GRASANY_OIDC_CLIENT_ID,redirectUri:env.GRASANY_OIDC_REDIRECT_URI,encryptionKey:env.GRASANY_OIDC_TOKEN_ENCRYPTION_KEY};}
 
+
+// 0%-traffic acceptance only. Public readiness and product principals never use this gate.
+export async function identityAcceptanceContext(request,env){
+  const secret=env.GRASANY_OIDC_ACCEPTANCE_SECRET,supplied=request.headers.get("x-sunoto-identity-acceptance");
+  if(env.GRASANY_OIDC_ACCEPTANCE_MODE!=="1"||!/^[0-9a-f]{64}$/.test(secret??"")||
+     !/^[0-9a-f]{64}$/.test(supplied??"")||!env.IDENTITY_ACCEPTANCE_SESSIONS||
+     new URL(request.url).origin!==GRASANY_OIDC_PACKET.proposedOrigin)return null;
+  const key=await crypto.subtle.importKey("raw",encoder.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign","verify"]);
+  const signature=await crypto.subtle.sign("HMAC",key,encoder.encode(supplied));
+  if(!await crypto.subtle.verify("HMAC",key,signature,encoder.encode(secret)))return null;
+  const scoped={...env,IDENTITY_SESSIONS:env.IDENTITY_ACCEPTANCE_SESSIONS};
+  return getGrasanyIdentityReadiness(scoped,{acceptanceOnly:true}).enabled?scoped:null;
+}
+async function authRouteEnvironment(request,env){
+  return getGrasanyIdentityReadiness(env).enabled?env:identityAcceptanceContext(request,env);
+}
+
 export function grasanyAuthHealth(env={}){return getGrasanyIdentityReadiness(env);}
 
 export async function beginGrasanyLogin(request,env,{fetcher=env.IDENTITY_FETCHER||env.FETCHER||fetch}={}){
-  const readiness=getGrasanyIdentityReadiness(env);if(!readiness.enabled)return identityUnavailableResponse();
+  env=await authRouteEnvironment(request,env);if(!env)return identityUnavailableResponse();
   const config=runtimeConfig(env),url=new URL(request.url),transaction=createOidcTransaction({returnTo:url.searchParams.get("return_to")||"/"});
   let metadata,challenge;
   try{[metadata,challenge]=await Promise.all([fetchOidcMetadata(fetcher),createPkceChallenge(transaction.verifier)]);}catch{return json({error:"identity_provider_unavailable"},503);}
@@ -46,7 +63,7 @@ export async function beginGrasanyLogin(request,env,{fetcher=env.IDENTITY_FETCHE
 }
 
 export async function completeGrasanyCallback(request,env,{fetcher=env.IDENTITY_FETCHER||env.FETCHER||fetch,now=Date.now()}={}){
-  const readiness=getGrasanyIdentityReadiness(env);if(!readiness.enabled)return identityUnavailableResponse();
+  env=await authRouteEnvironment(request,env);if(!env)return identityUnavailableResponse();
   const url=new URL(request.url),codes=url.searchParams.getAll("code"),states=url.searchParams.getAll("state"),errors=url.searchParams.getAll("error");
   if(codes.length!==1||states.length!==1||errors.length>1||errors.length)return json({error:"identity_callback_invalid"},400);
   const [code]=codes,[state]=states;if(!code||code.length>4096||!isBrowserBoundOidcState(request,state))return json({error:"identity_callback_invalid"},400);
@@ -104,7 +121,7 @@ async function refreshSessionTokens(request,env,sessionId,row,record,{fetcher=en
 }
 
 export async function readGrasanySession(request,env,options={}){
-  if(!getGrasanyIdentityReadiness(env).enabled)return identityUnavailableResponse();
+  env=await authRouteEnvironment(request,env);if(!env)return identityUnavailableResponse();
   const now=options.now??Date.now(),sessionId=cookieValue(request);if(!sessionId)return json({authenticated:false});
   const row=await identityStore.getSession(env,sessionId),record=rowRecord(row);
   if(!record||record.expiresAt<=now)return json({authenticated:false},401,{"set-cookie":clearSessionCookie()});
@@ -135,6 +152,7 @@ export async function verifyIdentityCsrf(request,env){
 
 export async function logoutGrasanySession(request,env){
   if(!isSameOriginMutation(request))return json({error:"origin_not_allowed"},403);
+  env=await authRouteEnvironment(request,env);if(!env)return identityUnavailableResponse();
   const sessionId=cookieValue(request);
   if(sessionId){
     try{
@@ -142,7 +160,8 @@ export async function logoutGrasanySession(request,env){
       const record=rowRecord(row);
       // Logout must not refresh central tokens or report success if deletion fails.
       if(row.status===200&&(!record||!sameSecret(request.headers.get("x-csrf-token"),record.csrfToken)))return json({error:"csrf_validation_failed"},403);
-      if(row.status!==404&&row.status!==410){
+      if(![200,404,410].includes(row.status))return json({error:"identity_logout_unavailable"},503);
+      if(row.status===200){
         const deleted=await identityStore.deleteSession(env,sessionId);
         if(![200,204,404,410].includes(deleted.status))return json({error:"identity_logout_unavailable"},503);
       }
