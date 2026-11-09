@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 env:
-  FIXTURE_SHA: c54ad21c23afd55b96e7230e615dd2b46ebaf4cb
+  FIXTURE_SHA: 7844088a1798ac0fca04f2cd0cd7dd1176dfc191
 jobs:
   fixture:
     runs-on: ubuntu-24.04
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: c54ad21c23afd55b96e7230e615dd2b46ebaf4cb
+          ref: 7844088a1798ac0fca04f2cd0cd7dd1176dfc191
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -24,7 +24,7 @@ jobs:
         run: |
           node --input-type=module - <<'JS'
           import assert from 'node:assert/strict';
-          import {isBrowserBoundOidcState,completeGrasanyCallback,logoutGrasanySession} from './worker/src/auth/grasanyIdentityFlow.js';
+          import {isBrowserBoundOidcState,completeGrasanyCallback,logoutGrasanySession,identityAcceptanceContext,readGrasanySession,getGrasanyPrincipal} from './worker/src/auth/grasanyIdentityFlow.js';
           import {resolveVerifiedProductIdentity} from './worker/src/auth/supabaseIdentityAdapter.js';
           import {GRASANY_OIDC_PACKET,getGrasanyIdentityReadiness} from './worker/src/auth/grasanyOidc.js';
           assert.equal(GRASANY_OIDC_PACKET.clientId,'689da8fc-ab29-4174-bc8c-f27509f4069d');
@@ -40,7 +40,27 @@ jobs:
             if(init.method==='DELETE'){deletes++;return new Response(null,{status:fail?500:204});}
             return Response.json({payload:JSON.stringify({csrfToken:'fixture-csrf'})});
           }})}};
-          const out=(origin,csrf)=>logoutGrasanySession(new Request('https://sunoto.grasany.com/api/v1/auth/logout',{method:'POST',headers:{origin,'x-csrf-token':csrf,cookie:'__Host-sunoto_session='+'C'.repeat(43)}}),env);
+          const syntheticGuard='f'.repeat(64);
+          Object.assign(env,{
+            GRASANY_OIDC_ACCEPTANCE_MODE:'1',
+            GRASANY_OIDC_ACCEPTANCE_SECRET:syntheticGuard,
+            IDENTITY_ACCEPTANCE_SESSIONS:env.IDENTITY_SESSIONS,
+            GRASANY_OIDC_ISSUER:GRASANY_OIDC_PACKET.issuer,
+            GRASANY_OIDC_CLIENT_ID:GRASANY_OIDC_PACKET.clientId,
+            GRASANY_OIDC_REDIRECT_URI:GRASANY_OIDC_PACKET.proposedCallback,
+            GRASANY_OIDC_TOKEN_ENCRYPTION_KEY:Buffer.alloc(32,2).toString('base64url'),
+          });
+          env.IDENTITY_SESSIONS={idFromName(){throw Error('production session store must not be used')}};
+          const gated=(provided,origin='https://sunoto.grasany.com')=>new Request(origin+'/api/v1/auth/session',{headers:provided?{'x-sunoto-identity-acceptance':provided}:{}});
+          assert.equal(await identityAcceptanceContext(gated(null),env),null);
+          assert.equal(await identityAcceptanceContext(gated('e'.repeat(64)),env),null);
+          assert.equal(await identityAcceptanceContext(gated(syntheticGuard,'https://wrong.invalid'),env),null);
+          assert.equal(await identityAcceptanceContext(gated(syntheticGuard),{...env,IDENTITY_ACCEPTANCE_SESSIONS:undefined}),null);
+          assert.equal((await identityAcceptanceContext(gated(syntheticGuard),env)).IDENTITY_SESSIONS,env.IDENTITY_ACCEPTANCE_SESSIONS);
+          assert.equal((await readGrasanySession(gated(null),env)).status,503);
+          assert.deepEqual(await (await readGrasanySession(gated(syntheticGuard),env)).json(),{authenticated:false});
+          assert.equal((await getGrasanyPrincipal(gated(syntheticGuard),env)).error,'identity_service_not_configured');
+          const out=(origin,csrf)=>logoutGrasanySession(new Request('https://sunoto.grasany.com/api/v1/auth/logout',{method:'POST',headers:{origin,'x-sunoto-identity-acceptance':syntheticGuard,'x-csrf-token':csrf,cookie:'__Host-sunoto_session='+'C'.repeat(43)}}),env);
           assert.equal((await out('https://evil.invalid','fixture-csrf')).status,403);
           assert.equal((await out('https://sunoto.grasany.com','wrong')).status,403);assert.equal(deletes,0);
           fail=true;assert.equal((await out('https://sunoto.grasany.com','fixture-csrf')).status,503);
