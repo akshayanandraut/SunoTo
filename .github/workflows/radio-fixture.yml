@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 env:
-  FIXTURE_SHA: 0a9ef4b3cceae4de552f00347fb531d7638b3615
+  FIXTURE_SHA: c54ad21c23afd55b96e7230e615dd2b46ebaf4cb
 jobs:
   fixture:
     runs-on: ubuntu-24.04
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: 0a9ef4b3cceae4de552f00347fb531d7638b3615
+          ref: c54ad21c23afd55b96e7230e615dd2b46ebaf4cb
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -24,7 +24,27 @@ jobs:
         run: |
           node --input-type=module - <<'JS'
           import assert from 'node:assert/strict';
-          import {isBrowserBoundOidcState,completeGrasanyCallback} from './worker/src/auth/grasanyIdentityFlow.js';
+          import {isBrowserBoundOidcState,completeGrasanyCallback,logoutGrasanySession} from './worker/src/auth/grasanyIdentityFlow.js';
+          import {resolveVerifiedProductIdentity} from './worker/src/auth/supabaseIdentityAdapter.js';
+          import {GRASANY_OIDC_PACKET,getGrasanyIdentityReadiness} from './worker/src/auth/grasanyOidc.js';
+          assert.equal(GRASANY_OIDC_PACKET.clientId,'689da8fc-ab29-4174-bc8c-f27509f4069d');
+          assert.equal(getGrasanyIdentityReadiness().enabled,false);
+          const principal={issuer:GRASANY_OIDC_PACKET.issuer,subject:'fixture-sub'};
+          const row={...principal,accountId:'00000000-0000-4000-8000-000000000001',roles:['admin']};
+          const mapping=await resolveVerifiedProductIdentity(principal,async q=>{assert.deepEqual(q,principal);return [row]});
+          assert.deepEqual(mapping.roles,[]);assert.deepEqual(mapping.entitlements,[]);
+          assert.equal(await resolveVerifiedProductIdentity(principal,async()=>[row,row]),null);
+          assert.equal(await resolveVerifiedProductIdentity({...principal,issuer:'https://wrong.invalid'},async()=>{throw Error('must not lookup')}),null);
+          let deletes=0,fail=false;
+          const env={IDENTITY_SESSIONS:{idFromName:x=>x,get:()=>({fetch:async (url,init)=>{
+            if(init.method==='DELETE'){deletes++;return new Response(null,{status:fail?500:204});}
+            return Response.json({payload:JSON.stringify({csrfToken:'fixture-csrf'})});
+          }})}};
+          const out=(origin,csrf)=>logoutGrasanySession(new Request('https://sunoto.grasany.com/api/v1/auth/logout',{method:'POST',headers:{origin,'x-csrf-token':csrf,cookie:'__Host-sunoto_session='+'C'.repeat(43)}}),env);
+          assert.equal((await out('https://evil.invalid','fixture-csrf')).status,403);
+          assert.equal((await out('https://sunoto.grasany.com','wrong')).status,403);assert.equal(deletes,0);
+          fail=true;assert.equal((await out('https://sunoto.grasany.com','fixture-csrf')).status,503);
+          fail=false;assert.equal((await out('https://sunoto.grasany.com','fixture-csrf')).status,204);
           const state='A'.repeat(43),other='B'.repeat(43),name='__Host-sunoto_oidc';
           const req=cookie=>new Request('https://sunoto.grasany.com/auth/callback?code=fixture&state='+state,{headers:{cookie}});
           assert.equal(isBrowserBoundOidcState(req(name+'='+state),state),true);
