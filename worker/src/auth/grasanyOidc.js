@@ -7,8 +7,8 @@ export const GRASANY_OIDC_PACKET=Object.freeze({
   issuer:"https://grtjbgksspckvtrvwwbm.supabase.co/auth/v1",
   discoveryUrl:"https://grtjbgksspckvtrvwwbm.supabase.co/auth/v1/.well-known/openid-configuration",
   authorizationEndpoint:"https://grtjbgksspckvtrvwwbm.supabase.co/auth/v1/oauth/authorize",
-  clientId:null,
-  callbacks:Object.freeze([]),
+  clientId:"689da8fc-ab29-4174-bc8c-f27509f4069d",
+  callbacks:Object.freeze(["https://sunoto.grasany.com/auth/callback"]),
   proposedOrigin:"https://sunoto.grasany.com",
   proposedCallback:"https://sunoto.grasany.com/auth/callback",
   acceptance:Object.freeze({login:false,callback:false,sessionReload:false,refresh:false,logout:false,revocation:false}),
@@ -41,6 +41,7 @@ export function getGrasanyIdentityReadiness(env={}){
   const clientId=env.GRASANY_OIDC_CLIENT_ID;
   const redirectUri=env.GRASANY_OIDC_REDIRECT_URI;
   const encryptionKey=decodeEncryptionKey(env.GRASANY_OIDC_TOKEN_ENCRYPTION_KEY);
+  for(const name of OIDC_VARS.slice(0,3))if(typeof env[name]!=="string"||!env[name].trim())blockers.push("runtime_"+name.toLowerCase()+"_missing");
   if(issuer&&issuer!==GRASANY_OIDC_PACKET.issuer)errors.push("issuer_not_in_central_packet");
   if(clientId&&(!GRASANY_OIDC_PACKET.clientId||clientId!==GRASANY_OIDC_PACKET.clientId))errors.push("client_not_registered");
   if(redirectUri&&!GRASANY_OIDC_PACKET.callbacks.includes(redirectUri))errors.push("callback_not_registered");
