@@ -1,5 +1,12 @@
 # SunoTo — Codex-Ready Product & Engineering Roadmap
 
+## Controlled SSO candidate — 2026-11-10
+
+Central registration verified on Grasany release `ff3c7ac4c2874538ac9cb2a92a65d098c17b82fc`: public client `689da8fc-ab29-4174-bc8c-f27509f4069d`, exact `https://sunoto.grasany.com/auth/callback`, PKCE S256. Public readiness and product principals stay disabled. Candidate `7844088a1798ac0fca04f2cd0cd7dd1176dfc191` adds an acceptance-only auth path requiring canonical origin, runtime mode, a 256-bit runtime credential, exact issuer/client/callback, encryption configuration and a separate `IDENTITY_ACCEPTANCE_SESSIONS` binding. Fixture CI run 42677448745 passed, including wrong credential/host, missing isolated binding, account lookup uniqueness and role denial, browser-bound callback state, and logout deletion failure. No hosted acceptance or key mutation.
+
+Pending: approved 0%-traffic candidate, verified distinct disposable session namespace and runtime-only acceptance credential; inspect existing production encryption configuration/state before any production key decision. Use a controlled browser that applies the candidate override and acceptance header only on the exact SunoTo origin, never the issuer. Verify login/callback/reload/forced refresh/logout/replay with one non-admin test identity; then remove temporary binding, key and route. The issuer-subject mapper is tested with a fixture lookup, not a deployed product data adapter. Real account linkage, SSO acceptance and radio catalog/mobile remain open. No Core, production traffic, R2 or payment changes.
+
+
 ## SEO-only candidate — 2026-11-01
 
 Private-indexing follow-up: added API/auth noindex/nofollow response headers without changing status, body, cookies, auth or cache semantics. Current isolated official tooling supports the unchanged production date; nine focused tests including actual local HTTP public/private/XML/plainrobots/real404 and response-preservation checks pass. No deployment; corrected SHA requires coordinated review.
