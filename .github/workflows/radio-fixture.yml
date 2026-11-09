@@ -2,11 +2,12 @@ name: Radio fixture build
 on:
   push:
     branches: [radio/launch-20261101]
+    paths: ['.github/workflows/radio-fixture.yml']
   workflow_dispatch:
 permissions:
   contents: read
 env:
-  FIXTURE_SHA: 8433c8759729b5a94743d5ae7a5aefb71daa4763
+  FIXTURE_SHA: 0137cef2cc0a5d6dc3833017563a36fbfbc1d380
 jobs:
   fixture:
     runs-on: ubuntu-24.04
@@ -14,11 +15,52 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: 8433c8759729b5a94743d5ae7a5aefb71daa4763
+          ref: 0137cef2cc0a5d6dc3833017563a36fbfbc1d380
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24.19.0'
+      - name: Exercise fail-closed guard before building
+        run: |
+          node --input-type=module - <<'JS'
+          import assert from 'node:assert/strict';
+          import {randomBytes} from 'node:crypto';
+          import guard from './worker/src/radioFixtureGuard.js';
+          import {signAnonymousToken} from './worker/src/auth/anonymousToken.js';
+          const id=randomBytes(16).toString('hex'),secret=randomBytes(32).toString('hex');
+          const key='__sunoto_synthetic/'+id+'/silence.wav';
+          const origin='https://fixture.invalid',path='/__radio-fixture/'+id;
+          let data, calls=0;
+          const check=k=>{calls++;assert.equal(k,key);};
+          const bucket={
+            async put(k,b,o){check(k);assert.equal(o.onlyIf.etagDoesNotMatch,'*');if(data)return null;data=b;return {};},
+            async head(k){check(k);return data?{size:data.length,customMetadata:{sunotoFixture:id}}:null;},
+            async get(k,{range}={}){check(k);return {body:range?data.slice(range.offset,range.offset+range.length):data};},
+            async delete(k){check(k);data=null;}
+          };
+          const env={RADIO_FIXTURE_ID:id,RADIO_FIXTURE_SECRET:secret,FIXTURE_BUCKET:bucket};
+          const req=(p=path,method='GET',auth=secret,extra={})=>guard.fetch(new Request(origin+p,{method,headers:{authorization:'Bearer '+auth,...extra}}),env);
+          for(const method of ['GET','HEAD','PUT','DELETE'])assert.equal((await req(path,method,'wrong')).status,404);
+          assert.equal((await req('/api/v1/wallet','PUT')).status,404);
+          assert.equal((await req(path,'POST')).status,404);assert.equal(calls,0);
+          const now=Math.floor(Date.now()/1000);
+          const token=async(sub,exp)=>path+'?t='+await signAnonymousToken({v:1,kind:'radio-media',sub,exp},'sunoto-radio-fixture:'+secret);
+          const signed=await token(key,now+600);
+          assert.equal((await req(signed)).status,404);
+          assert.equal((await req(path,'PUT')).status,201);
+          assert.equal((await req(path,'PUT')).status,409);
+          assert.equal((await req(await token(key,now-1))).status,403);
+          assert.equal((await req(await token(key+'wrong',now+600))).status,403);
+          const head=await req(signed,'HEAD');
+          assert.equal(head.status,200);assert.equal(head.headers.get('cache-control'),'no-store');
+          const range=await req(signed,'GET',secret,{Range:'bytes=0-43'});
+          assert.equal(range.status,206);assert.equal((await range.text()).slice(0,4),'RIFF');
+          assert.equal((await req(signed,'GET',secret,{Range:'bytes=99999-'})).status,416);
+          assert.equal((await req(signed)).status,200);
+          assert.equal((await req(path,'DELETE')).status,204);
+          assert.equal((await req(signed)).status,404);
+          console.log('Guard check passed: deny before R2, single key, no overwrite, signed ranges and cleanup.');
+          JS
       - run: npm ci --no-audit --no-fund
       - run: npm run build
         env:
