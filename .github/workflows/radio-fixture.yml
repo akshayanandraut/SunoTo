@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 env:
-  FIXTURE_SHA: 0137cef2cc0a5d6dc3833017563a36fbfbc1d380
+  FIXTURE_SHA: 0a9ef4b3cceae4de552f00347fb531d7638b3615
 jobs:
   fixture:
     runs-on: ubuntu-24.04
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: 0137cef2cc0a5d6dc3833017563a36fbfbc1d380
+          ref: 0a9ef4b3cceae4de552f00347fb531d7638b3615
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -60,6 +60,18 @@ jobs:
           assert.equal((await req(path,'DELETE')).status,204);
           assert.equal((await req(signed)).status,404);
           console.log('Guard check passed: deny before R2, single key, no overwrite, signed ranges and cleanup.');
+          JS
+      - name: Check OIDC browser-bound callback state
+        run: |
+          node --input-type=module - <<'JS'
+          import assert from 'node:assert/strict';
+          import {isBrowserBoundOidcState,completeGrasanyCallback} from './worker/src/auth/grasanyIdentityFlow.js';
+          const state='A'.repeat(43),other='B'.repeat(43),name='__Host-sunoto_oidc';
+          const req=cookie=>new Request('https://sunoto.grasany.com/auth/callback?code=fixture&state='+state,{headers:{cookie}});
+          assert.equal(isBrowserBoundOidcState(req(name+'='+state),state),true);
+          for(const cookie of ['',name+'='+other,name+'=%ZZ',name+'='+state+'; '+name+'='+state])assert.equal(isBrowserBoundOidcState(req(cookie),state),false);
+          assert.equal((await completeGrasanyCallback(req(name+'='+state),{})).status,503);
+          console.log('OIDC state requires matching initiating-browser cookie; production readiness remains fail-closed.');
           JS
       - run: npm ci --no-audit --no-fund
       - run: npm run build
