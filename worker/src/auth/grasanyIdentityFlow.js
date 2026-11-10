@@ -1,5 +1,6 @@
 import { GRASANY_OIDC_PACKET, createOidcTransaction, createPkceChallenge, decryptIdentityTokens, encryptIdentityTokens, fetchOidcMetadata, getGrasanyIdentityReadiness, identityUnavailableResponse, safeIdentityReturnTo, validateOidcInitialTokenResponse, verifyGrasanyIdToken } from "./grasanyOidc.js";
 import { identityStore } from "./identityStore.js";
+import { lookupSunotoProductIdentity } from "./supabaseIdentityAdapter.js";
 
 const SESSION_COOKIE="__Host-sunoto_session";
 const LOGIN_COOKIE="__Host-sunoto_oidc";
@@ -129,7 +130,8 @@ export async function readGrasanySession(request,env,options={}){
   if(record.accessExpiresAt<=now+REFRESH_SKEW_MS){
     const refreshed=await refreshSessionTokens(request,env,sessionId,row,record,{...options,now});if(refreshed.response)return refreshed.response;active=refreshed.record;
   }
-  return json({authenticated:true,provider:"grasany_id",user:{id:active.subject,email:active.email,emailVerified:active.emailVerified},csrfToken:active.csrfToken,productAccount:{status:"service_not_configured"},authorization:{roles:[],entitlements:[]}});
+  const productAccount=await lookupSunotoProductIdentity(env,{issuer:active.issuer,subject:active.subject});
+  return json({authenticated:true,provider:"grasany_id",user:{id:active.subject,email:active.email,emailVerified:active.emailVerified},csrfToken:active.csrfToken,productAccount:{status:productAccount.status},authorization:{roles:[],entitlements:[]}});
 }
 
 export async function getGrasanyPrincipal(request,env,options={}){
@@ -141,7 +143,8 @@ export async function getGrasanyPrincipal(request,env,options={}){
   if(record.accessExpiresAt<=now+REFRESH_SKEW_MS){
     const refreshed=await refreshSessionTokens(request,env,sessionId,row,record,{...options,now});if(refreshed.response)return{error:"identity_session_unavailable",response:refreshed.response};active=refreshed.record;
   }
-  return{issuer:active.issuer,subject:active.subject,claims:{sub:active.subject,email:active.email,email_verified:active.emailVerified},csrfToken:active.csrfToken,sessionId};
+  const productAccount=await lookupSunotoProductIdentity(env,{issuer:active.issuer,subject:active.subject});
+  return{issuer:active.issuer,subject:active.subject,productAccountId:productAccount.identity?.accountId??null,claims:{sub:active.subject,email:active.email,email_verified:active.emailVerified},csrfToken:active.csrfToken,sessionId};
 }
 
 export async function verifyIdentityCsrf(request,env){
