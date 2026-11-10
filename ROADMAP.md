@@ -2,6 +2,9 @@
 
 ## Controlled SSO candidate — 2026-11-10
 
+**Hosted product-store gate passed:** owner applied `20261110030449` in the exact original project `mybjgljylmcweeprhhlw` and verified one ledger row/six DDL statements, RLS, no browser access, service SELECT only, and an empty table. Exact adapter source `6292f50436954579e362bf348ec85fe4e58bbfd1` used the existing project-specific server credential against that Data API and returned HTTP 200 / `not_linked` for a random synthetic subject; the publishable-key read was denied HTTP 401. No rows created and no key copied, revealed, rotated or required from a browser. Production health still reported `bfa670f9`. Worker-level secret listing may reflect the latest inactive version; do not infer active production OIDC secret bindings from it. A linked non-admin provider lifecycle still requires an approved synthetic identity, scoped owner-created link with cleanup, and secure candidate-only browser/header mechanism. No re-staging in absence of that path.
+
+
 **Worker runtime audit:** exact source `6292f50436954579e362bf348ec85fe4e58bbfd1` uses manual redirect handling and bounded timeouts for provider discovery, token exchange/refresh, JWKS and product Data API requests. Redirect responses fail closed; no bearer or OAuth payload is forwarded. Local workerd (Wrangler 4.156.0, compatibility 2026-10-02, no remote bindings) returned 200 for native Web Crypto AES-GCM round-trip, actual 307 not-followed, discovery rejection and product lookup fail-closed. Exact-source synthetic lifecycle test passed. No ciphertext format change, key rotation, deployment, migration or catalog mutation. Existing SQL credential was not available through approved runtime input; prior management denial and detached no-route store cleanup 403 were not retried.
 
 
