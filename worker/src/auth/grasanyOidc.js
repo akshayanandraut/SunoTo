@@ -1,4 +1,4 @@
-import { GRASANY_REQUESTED_SCOPES } from "../services/grasanyOidcTokenContract.js";
+import { GRASANY_REQUESTED_SCOPES, validateInitialTokenResponse } from "../services/grasanyOidcTokenContract.js";
 
 // Central registration packet: ff3c7ac4c2874538ac9cb2a92a65d098c17b82fc.
 // Keep these values fail-closed until a regenerated packet provisions each item.
@@ -149,10 +149,9 @@ export async function verifyGrasanyIdToken(token,{jwks,issuer=GRASANY_OIDC_PACKE
 }
 
 export function validateOidcInitialTokenResponse(payload,scopes=GRASANY_REQUESTED_SCOPES){
-  if(!payload||typeof payload.access_token!=="string"||!payload.access_token||typeof payload.id_token!=="string"||!payload.id_token||typeof payload.refresh_token!=="string"||!payload.refresh_token||String(payload.token_type).toLowerCase()!=="bearer"||!Number.isFinite(payload.expires_in)||payload.expires_in<=0)throw new Error("identity_initial_token_response_incomplete");
-  const returned=new Set(typeof payload.scope==="string"?payload.scope.split(/\s+/).filter(Boolean):[]);
-  if(scopes.some(scope=>!returned.has(scope)))throw new Error("identity_initial_token_scope_incomplete");
-  return{accessToken:payload.access_token,idToken:payload.id_token,refreshToken:payload.refresh_token,tokenType:"Bearer",expiresAt:Date.now()+payload.expires_in*1000,scope:payload.scope};
+  const validated=validateInitialTokenResponse(payload,{requestedScopes:scopes});
+  return {accessToken:validated.accessToken,idToken:validated.idToken,refreshToken:validated.refreshToken,
+    tokenType:validated.tokenType,expiresAt:Date.now()+validated.expiresIn*1000,scope:validated.scopes.join(" ")};
 }
 
 export async function encryptIdentityTokens(tokens,keyString,{cryptoApi=globalThis.crypto}={}){
