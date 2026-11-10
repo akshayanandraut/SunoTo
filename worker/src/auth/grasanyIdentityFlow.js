@@ -76,11 +76,11 @@ export async function completeGrasanyCallback(request,env,{fetcher=env.IDENTITY_
   const config=runtimeConfig(env);let metadata;
   try{metadata=await fetchOidcMetadata(fetcher);}catch{return json({error:"identity_provider_unavailable"},503);}
   const body=new URLSearchParams({grant_type:"authorization_code",code,client_id:config.clientId,redirect_uri:config.redirectUri,code_verifier:transaction.verifier});let tokenResponse;
-  try{tokenResponse=await fetcher(metadata.tokenEndpoint,{method:"POST",headers:tokenRequestHeaders(),body});}catch{return json({error:"identity_provider_unavailable"},503);}
+  try{tokenResponse=await fetcher(metadata.tokenEndpoint,{method:"POST",headers:tokenRequestHeaders(),body,redirect:"manual",signal:AbortSignal.timeout(10000)});}catch{return json({error:"identity_provider_unavailable"},503);}
   if(!tokenResponse.ok)return json({error:"identity_code_exchange_failed"},401);
   const tokenPayload=await tokenResponse.json().catch(()=>null);let tokens;
   try{tokens=validateOidcInitialTokenResponse(tokenPayload);}catch{return json({error:"identity_token_response_invalid"},401);}
-  let jwksResponse;try{jwksResponse=await fetcher(metadata.jwksUri,{headers:{accept:"application/json"}});}catch{return json({error:"identity_provider_unavailable"},503);}
+  let jwksResponse;try{jwksResponse=await fetcher(metadata.jwksUri,{headers:{accept:"application/json"},redirect:"manual",signal:AbortSignal.timeout(5000)});}catch{return json({error:"identity_provider_unavailable"},503);}
   if(!jwksResponse.ok)return json({error:"identity_signing_keys_unavailable"},503);
   let verified;try{verified=await verifyGrasanyIdToken(tokens.idToken,{jwks:await jwksResponse.json().catch(()=>null),issuer:metadata.issuer,audience:config.clientId,nonce:transaction.nonce});}catch{return json({error:"identity_token_validation_failed"},401);}
   const sessionId=randomOpaqueId(),csrfToken=randomOpaqueId(),record={
@@ -105,7 +105,7 @@ async function refreshSessionTokens(request,env,sessionId,row,record,{fetcher=en
     const tokens=await decryptIdentityTokens(claimed.tokenEnvelope,env.GRASANY_OIDC_TOKEN_ENCRYPTION_KEY);
     if(!tokens.refreshToken)throw new Error("refresh_token_missing");
     const metadata=await fetchOidcMetadata(fetcher),config=runtimeConfig(env),body=new URLSearchParams({grant_type:"refresh_token",refresh_token:tokens.refreshToken,client_id:config.clientId});
-    const response=await fetcher(metadata.tokenEndpoint,{method:"POST",headers:tokenRequestHeaders(),body});
+    const response=await fetcher(metadata.tokenEndpoint,{method:"POST",headers:tokenRequestHeaders(),body,redirect:"manual",signal:AbortSignal.timeout(10000)});
     if(!response.ok)throw new Error("identity_refresh_rejected");
     const next=await response.json().catch(()=>null);
     if(!next||typeof next.access_token!=="string"||!next.access_token||String(next.token_type).toLowerCase()!=="bearer"||!Number.isFinite(next.expires_in)||next.expires_in<=0)throw new Error("identity_refresh_response_invalid");
