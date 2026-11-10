@@ -2,6 +2,9 @@
 
 ## Controlled SSO candidate — 2026-11-10
 
+**Worker runtime audit:** exact source `6292f50436954579e362bf348ec85fe4e58bbfd1` uses manual redirect handling and bounded timeouts for provider discovery, token exchange/refresh, JWKS and product Data API requests. Redirect responses fail closed; no bearer or OAuth payload is forwarded. Local workerd (Wrangler 4.156.0, compatibility 2026-10-02, no remote bindings) returned 200 for native Web Crypto AES-GCM round-trip, actual 307 not-followed, discovery rejection and product lookup fail-closed. Exact-source synthetic lifecycle test passed. No ciphertext format change, key rotation, deployment, migration or catalog mutation. Existing SQL credential was not available through approved runtime input; prior management denial and detached no-route store cleanup 403 were not retried.
+
+
 **Staging cleanup:** deployment `36bb5e70-652f-4d79-9e63-7529ca62be8b` detached acceptance candidate `bce47007-dc5f-48cd-978c-535e37a2ac11`. Original `ad56f11f-7b0b-4c18-9595-944f7a880009` remains the sole deployed version at 100%; canonical and old-override health both returned source `bfa670f9e783726ac54a83ec49087a0dfb0b6a42`, public sign-in returned 503. Verified the disposable session-store Worker and that its workers.dev and preview routes are disabled. Non-forced deletion of that exact store was refused by Cloudflare HTTP 403 / 10064; it remains in place, not deleted. No force delete, production data/key changes, or migration application. Live SSO still requires a new protected test window, an approved non-admin identity, real browser/provider lifecycle acceptance, and authorized product-link DDL.
 
 
