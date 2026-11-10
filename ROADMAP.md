@@ -1,7 +1,7 @@
 # SunoTo — Codex-Ready Product & Engineering Roadmap
 
 
-- **Radio launch, 2026-11-10:** Verified live R2 and the guest channel directory, acquired 20 publisher-sourced CC0 tracks with checksums and measured durations, and fixed audio recreation during player redraws. Enabled the existing production bucket binding in the candidate and passed 16 focused tests plus Wrangler dry-run packaging. Uploaded and checksum-verified all 20 private R2 objects and set the canonical media URL in the candidate. Fixed queue restart for rooms previously opened with an empty catalog. Pending curated metadata import, coordinated player deployment, and physical iPhone/Android playback and recovery acceptance. See [radio launch evidence](docs/radio-launch-20261101.md).
+- **Radio launch, 2026-11-10:** Curated radio is live at 100% on Cloudflare Worker version `8e1b026d-9df9-4df1-a6da-a02bf0da140a` (source `c87027b`). Imported 20 verified CC0 tracks into the original SunoTo project and private R2, fixed audio recreation and empty queue restart, and passed 16 focused checks. Live guest delivery matched two source hashes and passed signed range checks. Desktop Edge played through a track change and recovered after reload. Pending physical iPhone and Android screen-lock playback and controls. See [radio launch evidence](docs/radio-launch-20261101.md).
 
 ## SEO-only candidate — 2026-11-01
 
