@@ -36,7 +36,7 @@ export async function lookupSunotoProductIdentity(env,principal,fetcher=env.FETC
     const identity=await resolveVerifiedProductIdentity(principal,async ({issuer,subject})=>{
       const url=new URL("/rest/v1/grasany_identity_links",PRODUCT_DATABASE_ORIGIN);
       url.search=new URLSearchParams({select:"issuer,subject,account_id",issuer:"eq."+issuer,subject:"eq."+subject,limit:"2"});
-      const response=await fetcher(url,{method:"GET",headers:{apikey:secret,authorization:"Bearer "+secret,accept:"application/json"},redirect:"error",signal:AbortSignal.timeout(5000)});
+      const response=await fetcher(url,{method:"GET",headers:{apikey:secret,authorization:"Bearer "+secret,accept:"application/json"},redirect:"manual",signal:AbortSignal.timeout(5000)});
       if(!response.ok)throw Error("product_identity_lookup_failed");
       const rows=await response.json();
       if(!Array.isArray(rows))throw Error("product_identity_lookup_invalid");
