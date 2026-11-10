@@ -121,28 +121,34 @@ function applyRadioTrack(track){
   const player=document.querySelector("#party-radio-player");
   if(!player||!track?.mediaUrl)return;
   player.volume=radioVolume;
-  if(player.src!==track.mediaUrl){
-    player.src=track.mediaUrl;
-    const seek=()=>{if(track.elapsedSeconds>0)player.currentTime=track.elapsedSeconds;player.removeEventListener("loadedmetadata",seek);};
-    player.addEventListener("loadedmetadata",seek);
-    player.play().catch(()=>showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.blocked,true));
-  }
+  if(player.getAttribute("src")===track.mediaUrl)return;
+  const shouldPlay=!player.hasAttribute("src")||!player.paused||player.ended;
+  player.onloadedmetadata=()=>{
+    if(track.elapsedSeconds>0&&track.elapsedSeconds<player.duration)player.currentTime=track.elapsedSeconds;
+  };
+  player.src=track.mediaUrl;
+  if(shouldPlay)player.play().catch(error=>{
+    if(error.name!=="AbortError")showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.blocked,true);
+  });
 }
 function stopRadioVisualizer(){cancelAnimationFrame(radioAnimationId);radioAnimationId=null;radioSourceElement=null;}
 function setupRadioVisualizer(){
   const canvas=document.querySelector("#party-radio-canvas"),audio=document.querySelector("#party-radio-player");
   if(!canvas||!audio){stopRadioVisualizer();return;}
+  // Keep touch-first devices on the native audio path for background playback.
+  if(window.matchMedia("(pointer: coarse)").matches){canvas.hidden=true;return;}
   audio.volume=radioVolume;
-  if(radioSourceElement===audio)return;
   try{
-    radioAudioCtx??=new (window.AudioContext||window.webkitAudioContext)();
-    if(radioAudioCtx.state==="suspended")radioAudioCtx.resume().catch(()=>{});
-    const source=radioAudioCtx.createMediaElementSource(audio);
-    radioAnalyser=radioAudioCtx.createAnalyser();
-    radioAnalyser.fftSize=64;
-    source.connect(radioAnalyser);
-    radioAnalyser.connect(radioAudioCtx.destination);
-    radioSourceElement=audio;
+    if(radioSourceElement!==audio){
+      radioAudioCtx??=new (window.AudioContext||window.webkitAudioContext)();
+      if(radioAudioCtx.state==="suspended")radioAudioCtx.resume().catch(()=>{});
+      const source=radioAudioCtx.createMediaElementSource(audio);
+      radioAnalyser=radioAudioCtx.createAnalyser();
+      radioAnalyser.fftSize=64;
+      source.connect(radioAnalyser);
+      radioAnalyser.connect(radioAudioCtx.destination);
+      radioSourceElement=audio;
+    }
     const data=new Uint8Array(radioAnalyser.frequencyBinCount),ctx2d=canvas.getContext("2d");
     cancelAnimationFrame(radioAnimationId);
     const draw=()=>{
@@ -165,8 +171,6 @@ function spawnRadioReaction(reaction,name){
   host.append(node);
   setTimeout(()=>node.remove(),2200);
 }
-function stopSyntheticRadioReactions(){}
-function scheduleSyntheticRadioReaction(){}
 function updateRadioMediaSession(track){
   syncRadioMediaSession(track,{onSkipVote:()=>partyClient?.send("RADIO_SKIP_VOTE",{}),onPlayFailure:()=>showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.blocked,true)});
 }
@@ -177,23 +181,24 @@ function showRadioPlaybackStatus(message,showRetry=false){
 }
 function bindRadioPlayback(){
   const player=document.querySelector("#party-radio-player");
-  if(!player)return;
+  if(!player||document.querySelector("#party-radio-playback-status"))return;
   enableRadioPlayerControls(player);
   const status=document.createElement("p");status.id="party-radio-playback-status";status.className="muted";status.setAttribute("role","status");status.setAttribute("aria-live","polite");status.textContent=RADIO_PLAYBACK_MESSAGES.ready;
   const retry=document.createElement("button");retry.id="party-radio-retry";retry.type="button";retry.className="btn btn-ghost";retry.textContent="Retry playback";retry.hidden=true;
   player.after(status,retry);
+  player.addEventListener("pointerdown",()=>{if(radioAudioCtx?.state==="suspended")radioAudioCtx.resume().catch(()=>{});});
   player.addEventListener("playing",()=>{setRadioPlaybackState(navigator.mediaSession,"playing");showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.playing);});
   player.addEventListener("pause",()=>{if(!player.ended){setRadioPlaybackState(navigator.mediaSession,"paused");showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.paused);}});
   for(const event of ["waiting","stalled"])player.addEventListener(event,()=>{setRadioPlaybackState(navigator.mediaSession,"none");showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.buffering);});
   player.addEventListener("error",()=>{setRadioPlaybackState(navigator.mediaSession,"none");showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.error,true);});
   retry.addEventListener("click",()=>{player.load();player.play().catch(()=>showRadioPlaybackStatus(RADIO_PLAYBACK_MESSAGES.blocked,true));});
 }
-function leavePartyRoom(){stopPartyClient();stopSyntheticRadioReactions();state.partyListenerEstimate=0;partyMessages=[];gameStrokeLog=[];gameGuessLog=[];charadesLog=[];mafiaLog=[];state.partyGame=null;state.partyCharades=null;state.partyMafia=null;state.partyMafiaRole=null;state.partyMafiaInvestigation=null;state.partySnakeLadder=null;state.partyRummy=null;state.partyRummyHand=[];state.partyRummySelectedGroups=[[],[],[],[]];state.partyLudo=null;state.partyTeenPatti=null;state.partyTeenPattiHand=[];state.partyAndarBahar=null;state.partyDragonTiger=null;state.partyBidding=null;state.partyTugOfWar=null;state.partyEliminationReflex=null;state.partyPredictionPool=null;state.partyConnectFour=null;state.partyFreeze=null;state.partyScavenger=null;state.partyScene=null;state.partyRapBattle=null;state.partyRps=null;state.partyTicTacToe=null;state.partyRoom=null;state.partyQueueTracks=[];state.partyNowPlaying="";state.partyVideoParticipants=[];state.partyLocalVideoOn=false;state.partyVideoPublisherIds=[];state.partyMembers=[];state.partyMode="chat";state.partyCurrentTrack=null;state.partyRadioVotes={skipVotes:0,replayVotes:0,totalMembers:1};state.partySeated=false;state.partyIsCoHost=false;state.partySeatLimit=10;state.partySeatedCount=0;state.partySeatRequests=[];updateRadioMediaSession(null);render();}
+function leavePartyRoom(){stopPartyClient();state.partyListenerEstimate=0;partyMessages=[];gameStrokeLog=[];gameGuessLog=[];charadesLog=[];mafiaLog=[];state.partyGame=null;state.partyCharades=null;state.partyMafia=null;state.partyMafiaRole=null;state.partyMafiaInvestigation=null;state.partySnakeLadder=null;state.partyRummy=null;state.partyRummyHand=[];state.partyRummySelectedGroups=[[],[],[],[]];state.partyLudo=null;state.partyTeenPatti=null;state.partyTeenPattiHand=[];state.partyAndarBahar=null;state.partyDragonTiger=null;state.partyBidding=null;state.partyTugOfWar=null;state.partyEliminationReflex=null;state.partyPredictionPool=null;state.partyConnectFour=null;state.partyFreeze=null;state.partyScavenger=null;state.partyScene=null;state.partyRapBattle=null;state.partyRps=null;state.partyTicTacToe=null;state.partyRoom=null;state.partyQueueTracks=[];state.partyNowPlaying="";state.partyVideoParticipants=[];state.partyLocalVideoOn=false;state.partyVideoPublisherIds=[];state.partyMembers=[];state.partyMode="chat";state.partyCurrentTrack=null;state.partyRadioVotes={skipVotes:0,replayVotes:0,totalMembers:1};state.partySeated=false;state.partyIsCoHost=false;state.partySeatLimit=10;state.partySeatedCount=0;state.partySeatRequests=[];updateRadioMediaSession(null);render();}
 function handlePartyEvent(type,payload){
-  if(type==="READY"){state.partyParticipantId=payload.participantId;state.partyMembers=(payload.members||[]).map(member=>member.participantId).filter(id=>id&&id!==payload.participantId);if(payload.mode)state.partyMode=payload.mode;state.partyCurrentTrack=payload.currentTrack||null;state.partySeated=Boolean(payload.seated);state.partyIsCoHost=Boolean(payload.isCoHost);state.partySeatLimit=payload.seatLimit||10;state.partySeatedCount=payload.seatedCount||0;applyRadioTrack(payload.currentTrack);updateRadioMediaSession(payload.currentTrack||null);refreshRadioQueueSidebar();gameStrokeLog=[];gameGuessLog=[];charadesLog=[];mafiaLog=[];state.partyGame=payload.game?{...payload.game,isDrawer:payload.game.drawerParticipantId===payload.participantId,choices:[],word:null}:null;state.partyCharades=payload.charades?{...payload.charades,isPerformer:payload.charades.performerParticipantId===payload.participantId,choices:[],word:null}:null;state.partyMafia=payload.mafia||null;state.partyMafiaRole=null;state.partyMafiaInvestigation=null;state.partyVideoPublisherIds=payload.videoPublisherIds||[];state.partyVideoPublisherLimit=payload.videoPublisherLimit||4;state.partySnakeLadder=payload.snakeLadder||null;state.partyRummy=payload.rummy||null;state.partyRummyHand=[];state.partyRummySelectedGroups=[[],[],[],[]];state.partyLudo=payload.ludo||null;state.partyTeenPatti=payload.teenPatti||null;state.partyTeenPattiHand=[];state.partyAndarBahar=payload.andarBahar||null;state.partyDragonTiger=payload.dragonTiger||null;state.partyBidding=payload.bidding||null;state.partyTugOfWar=payload.tugOfWar||null;state.partyEliminationReflex=payload.eliminationReflex||null;state.partyPredictionPool=payload.predictionPool||null;state.partyConnectFour=payload.connectFour||null;state.partyFreeze=payload.freeze||null;state.partyScavenger=payload.scavenger||null;state.partyScene=payload.scene||null;state.partyRapBattle=payload.rapBattle||null;state.partyRps=payload.rpsDuel||null;state.partyTicTacToe=payload.vanishingTicTacToe||null;render();if(payload.currentTrack&&!radioSyntheticTimer)scheduleSyntheticRadioReaction();}
+  if(type==="READY"){state.partyParticipantId=payload.participantId;state.partyMembers=(payload.members||[]).map(member=>member.participantId).filter(id=>id&&id!==payload.participantId);if(payload.mode)state.partyMode=payload.mode;state.partyCurrentTrack=payload.currentTrack||null;state.partySeated=Boolean(payload.seated);state.partyIsCoHost=Boolean(payload.isCoHost);state.partySeatLimit=payload.seatLimit||10;state.partySeatedCount=payload.seatedCount||0;updateRadioMediaSession(payload.currentTrack||null);refreshRadioQueueSidebar();gameStrokeLog=[];gameGuessLog=[];charadesLog=[];mafiaLog=[];state.partyGame=payload.game?{...payload.game,isDrawer:payload.game.drawerParticipantId===payload.participantId,choices:[],word:null}:null;state.partyCharades=payload.charades?{...payload.charades,isPerformer:payload.charades.performerParticipantId===payload.participantId,choices:[],word:null}:null;state.partyMafia=payload.mafia||null;state.partyMafiaRole=null;state.partyMafiaInvestigation=null;state.partyVideoPublisherIds=payload.videoPublisherIds||[];state.partyVideoPublisherLimit=payload.videoPublisherLimit||4;state.partySnakeLadder=payload.snakeLadder||null;state.partyRummy=payload.rummy||null;state.partyRummyHand=[];state.partyRummySelectedGroups=[[],[],[],[]];state.partyLudo=payload.ludo||null;state.partyTeenPatti=payload.teenPatti||null;state.partyTeenPattiHand=[];state.partyAndarBahar=payload.andarBahar||null;state.partyDragonTiger=payload.dragonTiger||null;state.partyBidding=payload.bidding||null;state.partyTugOfWar=payload.tugOfWar||null;state.partyEliminationReflex=payload.eliminationReflex||null;state.partyPredictionPool=payload.predictionPool||null;state.partyConnectFour=payload.connectFour||null;state.partyFreeze=payload.freeze||null;state.partyScavenger=payload.scavenger||null;state.partyScene=payload.scene||null;state.partyRapBattle=payload.rapBattle||null;state.partyRps=payload.rpsDuel||null;state.partyTicTacToe=payload.vanishingTicTacToe||null;render();}
   if(type==="ROOM_MODE_CHANGED"){state.partyMode=payload.mode;render();}
-  if(type==="RADIO_TRACK_CHANGED"||type==="RADIO_TRACK_REPLAY"){state.partyCurrentTrack=payload.track;state.partyRadioVotes={skipVotes:0,replayVotes:0,totalMembers:state.partyRadioVotes?.totalMembers||1};applyRadioTrack(payload.track);updateRadioMediaSession(payload.track);if(type==="RADIO_TRACK_CHANGED")refreshRadioQueueSidebar();render();if(!radioSyntheticTimer)scheduleSyntheticRadioReaction();}
-  if(type==="RADIO_QUEUE_EMPTY"){state.partyCurrentTrack=null;updateRadioMediaSession(null);stopSyntheticRadioReactions();render();}
+  if(type==="RADIO_TRACK_CHANGED"||type==="RADIO_TRACK_REPLAY"){state.partyCurrentTrack=payload.track;state.partyRadioVotes={skipVotes:0,replayVotes:0,totalMembers:state.partyRadioVotes?.totalMembers||1};updateRadioMediaSession(payload.track);if(type==="RADIO_TRACK_CHANGED")refreshRadioQueueSidebar();render();}
+  if(type==="RADIO_QUEUE_EMPTY"){state.partyCurrentTrack=null;updateRadioMediaSession(null);render();}
   if(type==="RADIO_REACTION")spawnRadioReaction(payload.reaction,peerHandle(payload.participantId));
   if(type==="RADIO_VOTE_UPDATE"){state.partyRadioVotes={skipVotes:payload.skipVotes,replayVotes:payload.replayVotes,totalMembers:payload.totalMembers};const skipButton=document.querySelector("#party-radio-skip"),replayButton=document.querySelector("#party-radio-replay");if(skipButton)skipButton.textContent=`Skip (${payload.skipVotes}/${payload.totalMembers})`;if(replayButton)replayButton.textContent=`Once more (${payload.replayVotes}/${payload.totalMembers})`;}
   if(type==="ROOM_MESSAGE")appendPartyMessage("peer",String(payload.text||""));
@@ -344,7 +349,7 @@ function handlePartyEvent(type,payload){
   if(type==="PREDICT_STATE"){state.partyPredictionPool=payload;render();}
   if(type==="PREDICT_OVER"){state.partyPredictionPool={...state.partyPredictionPool,status:"game_over",secretNumber:payload.secretNumber,winnerParticipantIds:payload.winnerParticipantIds,guesses:state.partyPredictionPool?.guesses};const names=(payload.winnerParticipantIds||[]).map(id=>id===state.partyParticipantId?"You":peerHandle(id)).join(", ");state.partyMessage=payload.winnerParticipantIds?.length?`The number was ${payload.secretNumber}. ${names} closest, splitting ${Math.floor(payload.pot*0.9)} Credits!`:`The number was ${payload.secretNumber}. Nobody guessed.`;render();}
 }
-async function enterPartyRoom(room,isHost){await ensureAnonymousSession();stopPartyClient();stopSyntheticRadioReactions();partyMessages=[];gameStrokeLog=[];gameGuessLog=[];state.partyGame=null;state.partyRoom={...room,isHost};state.partyListenerEstimate=Math.max(0,Number(room.realListeners)||0);state.partyQueueTracks=[];state.partyMessage="";state.partyNowPlaying="";state.partyVideoParticipants=[];state.partyLocalVideoOn=false;state.partyVideoPublisherIds=[];state.partyMembers=[];state.partyMode=room.roomType==="music"||room.roomType==="radio"?"music":"chat";state.partyCurrentTrack=null;state.partyRadioVotes={skipVotes:0,replayVotes:0,totalMembers:1};state.partySeated=Boolean(isHost);state.partyIsCoHost=false;state.partySeatLimit=10;state.partySeatedCount=isHost?1:0;state.partySeatRequests=[];navigate("party");partyClient=new PartyRoomClient({onEvent:handlePartyEvent,onStatus:()=>{},onRemoteAudio:stream=>{const audio=new Audio();audio.srcObject=stream;audio.autoplay=true;audio.play().catch(()=>{});}});partyClient.connect({publicId:room.publicId,accountToken:null,isHost,anonymousToken:state.anonymousSession.token,roomType:room.roomType});}
+async function enterPartyRoom(room,isHost){await ensureAnonymousSession();stopPartyClient();partyMessages=[];gameStrokeLog=[];gameGuessLog=[];state.partyGame=null;state.partyRoom={...room,isHost};state.partyListenerEstimate=Math.max(0,Number(room.realListeners)||0);state.partyQueueTracks=[];state.partyMessage="";state.partyNowPlaying="";state.partyVideoParticipants=[];state.partyLocalVideoOn=false;state.partyVideoPublisherIds=[];state.partyMembers=[];state.partyMode=room.roomType==="music"||room.roomType==="radio"?"music":"chat";state.partyCurrentTrack=null;state.partyRadioVotes={skipVotes:0,replayVotes:0,totalMembers:1};state.partySeated=Boolean(isHost);state.partyIsCoHost=false;state.partySeatLimit=10;state.partySeatedCount=isHost?1:0;state.partySeatRequests=[];navigate("party");partyClient=new PartyRoomClient({onEvent:handlePartyEvent,onStatus:()=>{},onRemoteAudio:stream=>{const audio=new Audio();audio.srcObject=stream;audio.autoplay=true;audio.play().catch(()=>{});}});partyClient.connect({publicId:room.publicId,accountToken:null,isHost,anonymousToken:state.anonymousSession.token,roomType:room.roomType});}
 function stopVideoCall(notify=true){videoCall?.stop(notify);videoCall=null;const panel=document.querySelector("#video-panel");if(panel)panel.hidden=true;const local=document.querySelector("#video-local"),remote=document.querySelector("#video-remote");if(local)local.srcObject=null;if(remote)remote.srcObject=null;}
 async function populateVideoDevices(){const cameraSelect=document.querySelector("#video-camera-select"),micSelect=document.querySelector("#video-mic-select");if(!cameraSelect||!micSelect)return;const devices=await navigator.mediaDevices.enumerateDevices().catch(()=>[]);const cameras=devices.filter(device=>device.kind==="videoinput"),mics=devices.filter(device=>device.kind==="audioinput");cameraSelect.innerHTML=cameras.map(device=>`<option value="${device.deviceId}">${device.label||"Camera"}</option>`).join("");micSelect.innerHTML=mics.map(device=>`<option value="${device.deviceId}">${device.label||"Microphone"}</option>`).join("");}
 function startVideoCall(){const panel=document.querySelector("#video-panel");if(panel){panel.hidden=false;panel.classList.remove("video-connected");}videoCall=new VideoCallClient({send:(type,payload)=>realtime?.send(type,payload),onLocalStream:stream=>{const el=document.querySelector("#video-local");if(el)el.srcObject=stream;populateVideoDevices();},onRemoteStream:stream=>{const el=document.querySelector("#video-remote");if(el)el.srcObject=stream;document.querySelector("#video-panel")?.classList.add("video-connected");},onEnded:()=>stopVideoCall(false)});videoCall.start().catch(error=>{chatNotice(error.message||"Could not start video.");stopVideoCall(false);});
@@ -746,7 +751,22 @@ function renderAdBlockGate(){
   }
 }
 let lastRenderedRoute;
-function render(){const route=routeName(),routeChanged=route!==lastRenderedRoute;lastRenderedRoute=route;if(route!=="chat"){activityCleanup?.();tabLease?.close();tabLease=null;}if(route!=="party"&&state.partyRoom)stopPartyClient();if(route!=="forums"&&forumSocket)stopForumSocket();const arenaShouldBeActive=route==="arena"||(route==="party"&&state.partyRoom&&state.partyMode==="arena");if(!arenaShouldBeActive)unmountArena();app.innerHTML=views[route](state);bind();activateChat();if(route==="arena"){mountArena("lobby");restoreArenaLobbyLog();}if(route==="party"&&state.partyRoom){restorePartyMessages();setupRadioVisualizer();restoreGameCanvas();restoreGameGuessLog();bindGameCanvas();restoreCharadesLog();restoreMafiaLog();if(state.partyMode==="arena")mountArena("party");}else stopRadioVisualizer();if(state.adConfig)mountAds(document,{config:state.adConfig,registered:Boolean(state.accountSession),isPremium:Boolean(state.accountProfile?.profile?.is_premium),balance:state.wallet?.balance||0,scanCount:route==="party"?0:state.scanCount});if(route==="account")ensureAccountAuth().catch(error=>{state.accountMessage=friendlyError(error.message);});else if(routeName()==="onboarding")ensureAccountAuth().then(()=>{if(routeName()==="onboarding")render();}).catch(()=>{});else if(route==="party"&&!state.partyRoom){loadRadioChannels();}else if(GAME_ROUTES.has(route))loadGamesData();else if(route==="store")loadStoreData();else if(route==="live-world")loadLiveWorldData();else if(route==="forums"&&!state.activeForumTopic)loadForumTopics();else if(route==="home"&&!state.accountSession&&state.guestWin.status==="idle")loadGuestWinStatus();if(route==="live-world"&&!liveWorldPollId)liveWorldPollId=setInterval(()=>{if(routeName()!=="live-world"){clearInterval(liveWorldPollId);liveWorldPollId=null;return;}loadLiveWorldData();},5000);else if(route!=="live-world"&&liveWorldPollId){clearInterval(liveWorldPollId);liveWorldPollId=null;}if(routeChanged)window.scrollTo(0,0);}
+function renderView(route){
+  const player=app.querySelector("#party-radio-player");
+  const status=app.querySelector("#party-radio-playback-status");
+  const retry=app.querySelector("#party-radio-retry");
+  app.innerHTML=views[route](state);
+  const replacement=app.querySelector("#party-radio-player");
+  if(player&&replacement){
+    replacement.replaceWith(player,...[status,retry].filter(Boolean));
+  }else if(player){
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
+    updateRadioMediaSession(null);
+  }
+}
+function render(){const route=routeName(),routeChanged=route!==lastRenderedRoute;lastRenderedRoute=route;if(route!=="chat"){activityCleanup?.();tabLease?.close();tabLease=null;}if(route!=="party"&&state.partyRoom)stopPartyClient();if(route!=="forums"&&forumSocket)stopForumSocket();const arenaShouldBeActive=route==="arena"||(route==="party"&&state.partyRoom&&state.partyMode==="arena");if(!arenaShouldBeActive)unmountArena();renderView(route);bind();if(route==="party")applyRadioTrack(state.partyCurrentTrack);activateChat();if(route==="arena"){mountArena("lobby");restoreArenaLobbyLog();}if(route==="party"&&state.partyRoom){restorePartyMessages();setupRadioVisualizer();restoreGameCanvas();restoreGameGuessLog();bindGameCanvas();restoreCharadesLog();restoreMafiaLog();if(state.partyMode==="arena")mountArena("party");}else stopRadioVisualizer();if(state.adConfig)mountAds(document,{config:state.adConfig,registered:Boolean(state.accountSession),isPremium:Boolean(state.accountProfile?.profile?.is_premium),balance:state.wallet?.balance||0,scanCount:route==="party"?0:state.scanCount});if(route==="account")ensureAccountAuth().catch(error=>{state.accountMessage=friendlyError(error.message);});else if(routeName()==="onboarding")ensureAccountAuth().then(()=>{if(routeName()==="onboarding")render();}).catch(()=>{});else if(route==="party"&&!state.partyRoom){loadRadioChannels();}else if(GAME_ROUTES.has(route))loadGamesData();else if(route==="store")loadStoreData();else if(route==="live-world")loadLiveWorldData();else if(route==="forums"&&!state.activeForumTopic)loadForumTopics();else if(route==="home"&&!state.accountSession&&state.guestWin.status==="idle")loadGuestWinStatus();if(route==="live-world"&&!liveWorldPollId)liveWorldPollId=setInterval(()=>{if(routeName()!=="live-world"){clearInterval(liveWorldPollId);liveWorldPollId=null;return;}loadLiveWorldData();},5000);else if(route!=="live-world"&&liveWorldPollId){clearInterval(liveWorldPollId);liveWorldPollId=null;}if(routeChanged)window.scrollTo(0,0);}
 let reflexTimer=null;
 function startReflexRound(stakeSparks){if(state.reflexStage==="waiting"||state.reflexStage==="go")return;state.reflexStake=stakeSparks;state.reflexStage="waiting";render();const delay=800+Math.random()*2200;reflexTimer=setTimeout(()=>{state.reflexStage="go";state.reflexGoAt=performance.now();render();},delay);}
 function handleReflexTap(){if(state.reflexStage==="waiting"){clearTimeout(reflexTimer);submitReflexResult(0,true);}else if(state.reflexStage==="go"){submitReflexResult(Math.round(performance.now()-state.reflexGoAt),false);}}

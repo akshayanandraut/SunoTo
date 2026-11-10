@@ -1,9 +1,14 @@
 # Radio launch continuation
 
-Fresh Cloudflare R2 bucket inventory on 2026-11-01 still fails with API10042: owner must enable R2 through the account dashboard and accept billing terms personally. No billing consent, paid upgrade or alternate storage architecture was attempted.
+## Verified on 2026-11-10
 
-Player candidate derives from live SEO revision bfa670f9e783726ac54a83ec49087a0dfb0b6a42. Only radio-playback.js, radio.css and its tokens.css import are brought from held main; unrelated identity changes and dirty application/view files are excluded. Not deployed yet.
+- The existing Cloudflare R2 bucket `sunoto-radio` is active in WEUR. Bucket info returned one 43-byte object before catalog import.
+- `radio.grasany.com` responds with HTTP 308 to `https://sunoto.grasany.com/#party`. The public channel endpoint returns the curated and public channels to guests. The live release manifest still reports `bfa670f9e783726ac54a83ec49087a0dfb0b6a42`.
+- The launch catalog is 20 unique MP3s (33 minutes) from [Kainotomic's publisher catalog](https://kaino.dev/library/music) under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/legalcode). Each file has a source URL, measured MP3 duration, size and SHA-256 in the accompanying manifest.
+- The player candidate keeps the same audio element and controls through room redraws, applies the live position to a new source and uses native audio on touch-first devices. It removes stale references to disabled synthetic reactions from the radio event path.
 
-Catalog research: original publisher https://kaino.dev/library/music publishes a CC0 1.0 dedication by Kainotomic covering its audio files, including commercial copying/distribution. It exposes per-track MP3 downloads. This is a sourcing candidate, not an assertion that 60–100 files have been downloaded, checked or imported. Preserve per-track source, license, attribution, download checksum and duration evidence before import; do not use an unverified FreePD mirror (original FreePD site reports closure).
+## Pending
 
-Remaining: R2 activation, track-level catalog acquisition/verification and import, guest-access review, clean build/player checks, deployment and actual desktop/mobile background listening. Browser viewport emulation is not physical-device lock-screen acceptance, and browser termination survival is not promised. Ads/payments stay closed absent separate approvals.
+- Import the checked catalog through the curated-channel admin path and reconcile the resulting queue with the manifest.
+- Build and stage the player from the public baseline and coordinate promotion with Grasany's identity canary. Record the exact active Worker version and confirm guest audio, signed range delivery, track change and recovery.
+- Verify actual playback on iPhone Safari and Android Chrome, including screen lock across a track change and playback controls. Desktop emulation does not satisfy this gate.

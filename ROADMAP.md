@@ -1,5 +1,8 @@
 # SunoTo — Codex-Ready Product & Engineering Roadmap
 
+
+- **Radio launch, 2026-11-10:** Verified live R2 and the guest channel directory, acquired 20 publisher-sourced CC0 tracks with checksums and measured durations, and fixed audio recreation during player redraws. Pending catalog import, coordinated player deployment, and physical iPhone/Android playback and recovery acceptance. See [radio launch evidence](docs/radio-launch-20261101.md).
+
 ## SEO-only candidate — 2026-11-01
 
 Private-indexing follow-up: added API/auth noindex/nofollow response headers without changing status, body, cookies, auth or cache semantics. Current isolated official tooling supports the unchanged production date; nine focused tests including actual local HTTP public/private/XML/plainrobots/real404 and response-preservation checks pass. No deployment; corrected SHA requires coordinated review.
