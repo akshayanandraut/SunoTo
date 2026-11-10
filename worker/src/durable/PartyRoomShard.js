@@ -18,6 +18,7 @@ import { AnalyticsService } from "../services/AnalyticsService.js";
 import { signAnonymousToken } from "../auth/anonymousToken.js";
 
 const RADIO_MEDIA_TOKEN_SECONDS = 900;
+const RADIO_QUEUE_RETRY_MS = 8_000;
 
 const HEARTBEAT_STALE_MS = HOST_INACTIVITY_TIMEOUT_SECONDS * 1000;
 const RADIO_SKIP_THRESHOLD = 0.05;
@@ -101,7 +102,6 @@ export class PartyRoomShard {
 
     const publicIdMatch = url.pathname.match(/\/party-rooms\/([0-9a-fA-F-]{36})\/socket$/);
     const storedRoom = await this.state.storage.get("room");
-    const isFreshRoom = !storedRoom;
     const room = storedRoom || { hostUserId: isHost ? accountUserId : null, hostLastActiveAt: Date.now(), mode: roomTypeHint === "radio" ? "music" : DEFAULT_ROOM_MODE_ID, seatedParticipantIds: [], coHostAccountIds: [], preauthorizedAccountIds: [], bannedAccountIds: [] };
     room.seatedParticipantIds ??= []; room.coHostAccountIds ??= []; room.preauthorizedAccountIds ??= []; room.bannedAccountIds ??= []; room.videoPublisherIds ??= [];
     if (room.closed) {
@@ -158,10 +158,6 @@ export class PartyRoomShard {
           }
         }
       } catch {}
-    }
-
-    if (isFreshRoom && room.roomType === "radio" && room.mode === "music" && !room.currentTrack) {
-      await this.advanceRadioTrack(room);
     }
 
     const currentTrack = room.currentTrack ? { title: room.currentTrack.title, artistName: room.currentTrack.artistName, durationSeconds: room.currentTrack.durationSeconds, elapsedSeconds: Math.max(0, Math.round(room.currentTrack.durationSeconds - (room.currentTrackEndsAt - Date.now()) / 1000)), listenerMessage: room.currentTrack.listenerMessage || null, license: room.currentTrack.license || null, attributionText: room.currentTrack.attributionText || null, mediaUrl: await this.mediaUrl(room.currentTrack.storageKey), artworkUrl: await this.mediaUrl(room.currentTrack.artworkKey) } : null;
@@ -2984,11 +2980,17 @@ export class PartyRoomShard {
   }
 
   async scheduleAlarm(room) {
+    if (!this.state.getWebSockets().length) return;
     const now = Date.now();
     const candidates = [now + HEARTBEAT_STALE_MS];
+    if (room.roomType === "radio" && room.mode === "music" && !room.currentTrack) {
+      candidates.push(now + RADIO_QUEUE_RETRY_MS);
+      const scheduled = await this.state.storage.getAlarm();
+      if (scheduled !== null) candidates.push(scheduled);
+    }
     if (room.currentTrackEndsAt) candidates.push(room.currentTrackEndsAt);
     if (room.game?.phaseEndsAt) candidates.push(room.game.phaseEndsAt);
-    if (this.state.getWebSockets().length) await this.state.storage.setAlarm(Math.min(...candidates));
+    await this.state.storage.setAlarm(Math.min(...candidates));
   }
 
   async alarm() {
@@ -2998,6 +3000,10 @@ export class PartyRoomShard {
       this.broadcast(event("HOST_INACTIVE", { hostUserId: room.hostUserId }));
     }
     if (room.currentTrackEndsAt && now >= room.currentTrackEndsAt) {
+      await this.advanceRadioTrack(room);
+      return;
+    }
+    if (room.roomType === "radio" && room.mode === "music" && !room.currentTrack && this.state.getWebSockets().length) {
       await this.advanceRadioTrack(room);
       return;
     }

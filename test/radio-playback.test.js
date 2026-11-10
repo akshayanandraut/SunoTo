@@ -1,7 +1,33 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { PartyRoomShard } from "../worker/src/durable/PartyRoomShard.js";
 import { RADIO_PLAYBACK_MESSAGES, enableRadioPlayerControls, setRadioPlaybackState, syncRadioMediaSession } from "../web/js/radio-playback.js";
+
+it("retries a previously empty radio room while listeners are connected", async () => {
+  const room = { roomType: "radio", mode: "music", currentTrack: null };
+  let listeners = [{}], scheduled = Date.now() + 1_000, advances = 0;
+  const roomShard = new PartyRoomShard({
+    getWebSockets: () => listeners,
+    storage: {
+      get: async () => room,
+      getAlarm: async () => scheduled,
+      setAlarm: async (when) => { scheduled = when; },
+    },
+  }, {});
+  const earlierAlarm = scheduled;
+  await roomShard.scheduleAlarm(room);
+  assert.equal(scheduled, earlierAlarm);
+  roomShard.advanceRadioTrack = async (currentRoom) => {
+    assert.equal(currentRoom, room);
+    advances++;
+  };
+  await roomShard.alarm();
+  assert.equal(advances, 1);
+  listeners = [];
+  await roomShard.alarm();
+  assert.equal(advances, 1);
+});
 
 describe("radio playback controls", () => {
   it("keeps media metadata from claiming playback before the audio starts", () => {

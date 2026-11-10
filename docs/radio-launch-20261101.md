@@ -5,8 +5,10 @@
 - The existing Cloudflare R2 bucket `sunoto-radio` is active in WEUR. Bucket info returned one 43-byte object before catalog import.
 - `radio.grasany.com` responds with HTTP 308 to `https://sunoto.grasany.com/#party`. The public channel endpoint returns the curated and public channels to guests. The live release manifest still reports `bfa670f9e783726ac54a83ec49087a0dfb0b6a42`.
 - The launch catalog is 20 unique MP3s (33 minutes) from [Kainotomic's publisher catalog](https://kaino.dev/library/music) under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/legalcode). Each file has a source URL, measured MP3 duration, size and SHA-256 in the accompanying manifest.
-- All 20 catalog MP3s were uploaded to new keys in the existing private bucket and read back with matching SHA-256 hashes and lengths. The production candidate binds the bucket and sets the canonical origin for signed audio URLs. Wrangler dry-run reports the expected bucket and packages the frontend. The 15 focused radio playback and licensing tests pass.
+- All 20 catalog MP3s were uploaded to new keys in the existing private bucket and read back with matching SHA-256 hashes and lengths. The production candidate binds the bucket and sets the canonical origin for signed audio URLs. Wrangler dry-run reports the expected bucket and packages the frontend. The 16 focused radio playback and licensing tests pass.
 - The player candidate keeps the same audio element and controls through room redraws, applies the live position to a new source and uses native audio on touch-first devices. It removes stale references to disabled synthetic reactions from the radio event path.
+
+- An empty station retries the queue on its existing Durable Object alarm while listeners are connected. A previously opened empty room can pick up the new catalog.
 
 ## Pending
 
