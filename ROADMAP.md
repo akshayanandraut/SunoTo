@@ -2,6 +2,9 @@
 
 ## Controlled SSO candidate — 2026-11-10
 
+**Product-store integration:** candidate `d28318eaf0b4c3a767c0e0fd694d502ceda216fb` adds migration `20261110030449` and wires a read-only lookup on exact product project `mybjgljylmcweeprhhlw`. No profile creation/backfill, email matching or role grants. Table has RLS, browser roles have no privileges, and the product service role receives SELECT only. The runtime lookup defaults off, returning explicit linked/not-linked/unavailable status when enabled. GitHub run [42747249093](https://github.com/akshayanandraut/SunoTo/actions/runs/42747249093) passed the adapter and lifecycle steps. Migration is not applied; prior management API denial was not retried. Production SQLite IdentitySessionShard metadata returned one namespace and zero listed/stored objects, no continuation; no contents were read and no key was created or rotated. Protected hosting still requires a distinct acceptance namespace and exact production-configured 0%-traffic package. Production untouched.
+
+
 **Acceptance update:** exact handler/test source `f59b1275929a393343a2e73965b69d1d0c52659a`, workflow driver `35f7f03b781cc237b411854b6e0ce13cc1b1e03f`, GitHub run [42677728027](https://github.com/akshayanandraut/SunoTo/actions/runs/42677728027) passed. Actual app handlers ran against a synthetic signed issuer and isolated fixture storage: login/PKCE, browser-bound callback, replay rejection, encrypted token persistence, reload, forced refresh/rotation, local logout and session deletion. Real provider accepted the registered exact callback (302 to Grasany consent) and rejected an unregistered callback (400 validation_failed); consent was not followed and no real tokens were exchanged. Production session remains 503. No Core registry API dependency found in SunoTo source; existing Grasany consent UI is part of the provider journey. Browser initialization remains unavailable for live acceptance; no deployment or key mutation.
 
 
