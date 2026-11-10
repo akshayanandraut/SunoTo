@@ -6,7 +6,10 @@ export function createRefreshTokenForm({refreshToken,clientId}={}){
 }
 
 export function validateInitialTokenResponse(payload,{requestedScopes=GRASANY_REQUESTED_SCOPES}={}){
-  const scopes=typeof payload?.scope==="string"?payload.scope.split(/\s+/).filter(Boolean):[];
+  const hasScope=payload!==null&&typeof payload==="object"&&Object.hasOwn(payload,"scope");
+  // RFC 6749 §5.1: omission means the authorization request's original scope.
+  if(hasScope&&(typeof payload.scope!=="string"||payload.scope!==payload.scope.trim()||!/^[\x21\x23-\x5b\x5d-\x7e]+(?: [\x21\x23-\x5b\x5d-\x7e]+)*$/.test(payload.scope)))throw new Error("identity_initial_token_scope_invalid");
+  const scopes=hasScope?payload.scope.split(" "):[...requestedScopes];
   const valid=payload&&typeof payload.access_token==="string"&&payload.access_token.length>0&&
     typeof payload.id_token==="string"&&payload.id_token.length>0&&
     typeof payload.refresh_token==="string"&&payload.refresh_token.length>0&&

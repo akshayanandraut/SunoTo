@@ -1,14 +1,14 @@
-import { GRASANY_REQUESTED_SCOPES } from "../services/grasanyOidcTokenContract.js";
+import { GRASANY_REQUESTED_SCOPES, validateInitialTokenResponse } from "../services/grasanyOidcTokenContract.js";
 
-// Central packet schemaVersion 2, commit 8d6f18a9000eb736a11ecc789a097cab7bc0f7d9.
+// Central registration packet: ff3c7ac4c2874538ac9cb2a92a65d098c17b82fc.
 // Keep these values fail-closed until a regenerated packet provisions each item.
 export const GRASANY_OIDC_PACKET=Object.freeze({
   enabled:false,
   issuer:"https://grtjbgksspckvtrvwwbm.supabase.co/auth/v1",
   discoveryUrl:"https://grtjbgksspckvtrvwwbm.supabase.co/auth/v1/.well-known/openid-configuration",
   authorizationEndpoint:"https://grtjbgksspckvtrvwwbm.supabase.co/auth/v1/oauth/authorize",
-  clientId:null,
-  callbacks:Object.freeze([]),
+  clientId:"689da8fc-ab29-4174-bc8c-f27509f4069d",
+  callbacks:Object.freeze(["https://sunoto.grasany.com/auth/callback"]),
   proposedOrigin:"https://sunoto.grasany.com",
   proposedCallback:"https://sunoto.grasany.com/auth/callback",
   acceptance:Object.freeze({login:false,callback:false,sessionReload:false,refresh:false,logout:false,revocation:false}),
@@ -35,20 +35,21 @@ function decodeEncryptionKey(value){
   try{const bytes=fromBase64Url(value);return bytes.byteLength===32?bytes:null;}catch{return null;}
 }
 
-export function getGrasanyIdentityReadiness(env={}){
+export function getGrasanyIdentityReadiness(env={}, {acceptanceOnly=false}={}){
   const errors=[],blockers=[];
   const issuer=env.GRASANY_OIDC_ISSUER;
   const clientId=env.GRASANY_OIDC_CLIENT_ID;
   const redirectUri=env.GRASANY_OIDC_REDIRECT_URI;
   const encryptionKey=decodeEncryptionKey(env.GRASANY_OIDC_TOKEN_ENCRYPTION_KEY);
+  for(const name of OIDC_VARS.slice(0,3))if(typeof env[name]!=="string"||!env[name].trim())blockers.push("runtime_"+name.toLowerCase()+"_missing");
   if(issuer&&issuer!==GRASANY_OIDC_PACKET.issuer)errors.push("issuer_not_in_central_packet");
   if(clientId&&(!GRASANY_OIDC_PACKET.clientId||clientId!==GRASANY_OIDC_PACKET.clientId))errors.push("client_not_registered");
   if(redirectUri&&!GRASANY_OIDC_PACKET.callbacks.includes(redirectUri))errors.push("callback_not_registered");
   if(env.GRASANY_OIDC_TOKEN_ENCRYPTION_KEY&&!encryptionKey)errors.push("token_encryption_key_invalid");
-  if(!GRASANY_OIDC_PACKET.enabled)blockers.push("central_oidc_disabled");
+  if(!acceptanceOnly&&!GRASANY_OIDC_PACKET.enabled)blockers.push("central_oidc_disabled");
   if(!GRASANY_OIDC_PACKET.clientId)blockers.push("client_registration_missing");
   if(!GRASANY_OIDC_PACKET.callbacks.length)blockers.push("callback_not_registered");
-  for(const acceptance of REQUIRED_ACCEPTANCE)if(GRASANY_OIDC_PACKET.acceptance[acceptance]!==true)blockers.push(`acceptance_${acceptance}_pending`);
+  for(const acceptance of REQUIRED_ACCEPTANCE)if(!acceptanceOnly&&GRASANY_OIDC_PACKET.acceptance[acceptance]!==true)blockers.push(`acceptance_${acceptance}_pending`);
   if(!env.IDENTITY_SESSIONS)blockers.push("identity_session_store_missing");
   if(!encryptionKey)blockers.push("token_encryption_key_missing");
   return Object.freeze({
@@ -56,7 +57,7 @@ export function getGrasanyIdentityReadiness(env={}){
     status:errors.length?"misconfigured":blockers.length?"not_configured":"ready",
     provider:"grasany_oidc",
     packetSchemaVersion:2,
-    packetCommit:"8d6f18a9000eb736a11ecc789a097cab7bc0f7d9",
+    packetCommit:"ff3c7ac4c2874538ac9cb2a92a65d098c17b82fc",
     issuer:GRASANY_OIDC_PACKET.issuer,
     scopes:GRASANY_OIDC_PACKET.scopes,
     errors:Object.freeze(errors),
@@ -116,7 +117,7 @@ export async function createPkceChallenge(verifier,cryptoApi=globalThis.crypto){
 }
 
 export async function fetchOidcMetadata(fetcher=fetch){
-  const response=await fetcher(GRASANY_OIDC_PACKET.discoveryUrl,{headers:{accept:"application/json"}});
+  const response=await fetcher(GRASANY_OIDC_PACKET.discoveryUrl,{headers:{accept:"application/json"},redirect:"manual",signal:AbortSignal.timeout(5000)});
   if(!response.ok)throw new Error("identity_discovery_unavailable");
   const metadata=await response.json(),issuer=new URL(GRASANY_OIDC_PACKET.issuer),endpoints=[metadata.authorization_endpoint,metadata.token_endpoint,metadata.jwks_uri];
   if(metadata.issuer!==issuer.toString()||endpoints.some(value=>{try{const url=new URL(value);return url.protocol!=="https:"||url.origin!==issuer.origin||!url.pathname.startsWith(issuer.pathname+"/");}catch{return true;}}))throw new Error("identity_discovery_contract_invalid");
@@ -148,10 +149,9 @@ export async function verifyGrasanyIdToken(token,{jwks,issuer=GRASANY_OIDC_PACKE
 }
 
 export function validateOidcInitialTokenResponse(payload,scopes=GRASANY_REQUESTED_SCOPES){
-  if(!payload||typeof payload.access_token!=="string"||!payload.access_token||typeof payload.id_token!=="string"||!payload.id_token||typeof payload.refresh_token!=="string"||!payload.refresh_token||String(payload.token_type).toLowerCase()!=="bearer"||!Number.isFinite(payload.expires_in)||payload.expires_in<=0)throw new Error("identity_initial_token_response_incomplete");
-  const returned=new Set(typeof payload.scope==="string"?payload.scope.split(/\s+/).filter(Boolean):[]);
-  if(scopes.some(scope=>!returned.has(scope)))throw new Error("identity_initial_token_scope_incomplete");
-  return{accessToken:payload.access_token,idToken:payload.id_token,refreshToken:payload.refresh_token,tokenType:"Bearer",expiresAt:Date.now()+payload.expires_in*1000,scope:payload.scope};
+  const validated=validateInitialTokenResponse(payload,{requestedScopes:scopes});
+  return {accessToken:validated.accessToken,idToken:validated.idToken,refreshToken:validated.refreshToken,
+    tokenType:validated.tokenType,expiresAt:Date.now()+validated.expiresIn*1000,scope:validated.scopes.join(" ")};
 }
 
 export async function encryptIdentityTokens(tokens,keyString,{cryptoApi=globalThis.crypto}={}){
