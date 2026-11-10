@@ -2,6 +2,9 @@
 
 ## Controlled SSO candidate — 2026-11-10
 
+**Staging cleanup:** deployment `36bb5e70-652f-4d79-9e63-7529ca62be8b` detached acceptance candidate `bce47007-dc5f-48cd-978c-535e37a2ac11`. Original `ad56f11f-7b0b-4c18-9595-944f7a880009` remains the sole deployed version at 100%; canonical and old-override health both returned source `bfa670f9e783726ac54a83ec49087a0dfb0b6a42`, public sign-in returned 503. Verified the disposable session-store Worker and that its workers.dev and preview routes are disabled. Non-forced deletion of that exact store was refused by Cloudflare HTTP 403 / 10064; it remains in place, not deleted. No force delete, production data/key changes, or migration application. Live SSO still requires a new protected test window, an approved non-admin identity, real browser/provider lifecycle acceptance, and authorized product-link DDL.
+
+
 **Hosted protected acceptance:** production-configured source `f66c7619da1581cd7f14ed02fc93324564e3b91b` staged as Worker version `bce47007-dc5f-48cd-978c-535e37a2ac11` at 0%; original `ad56f11f-7b0b-4c18-9595-944f7a880009` still receives 100%. Acceptance session binding points to the separate no-route Worker `sunoto-oidc-acceptance-20261110`, version `dc60a7cb-669a-49ec-b742-b5ff2c47a905`. Actual canonical-origin override verified exact candidate, absent/wrong guard 503, valid guarded anonymous session 200 and guarded login 302 with real issuer discovery, PKCE S256 and secure browser cookie. No real tokens, roles or account data were produced. Guard/key only existed in deployment process and version secret bindings; no production key was rotated. The temporary login record expires via Durable Object alarm. Interactive continuation needs a controlled browser and secure guard provisioning for that test run; no credential is recoverable via chat. Database migration remains unapplied; no authorized DDL path found and the prior denied operation was not retried. Public auth remains closed.
 
 
