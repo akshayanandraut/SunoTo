@@ -7,7 +7,10 @@ const fixture=async name=>JSON.parse(await readFile(new URL(`./fixtures/identity
 
 test("central OIDC initial exchange requires persistent-session tokens and all approved scopes",async()=>{
   const payload=await fixture("initial-token-valid");
-  assert.equal(validateInitialTokenResponse(payload).refreshToken,"refresh");
+  assert.equal(validateInitialTokenResponse(payload).refreshToken,payload.refresh_token);
+  const {scope,...omitted}=payload;
+  assert.deepEqual(validateInitialTokenResponse(omitted).scopes,GRASANY_REQUESTED_SCOPES);
+  for(const scope of [null,"","openid  email profile","openid email profile\n"])assert.throws(()=>validateInitialTokenResponse({...payload,scope}),/scope_invalid/);
   assert.throws(()=>validateInitialTokenResponse({...payload,refresh_token:undefined}),/identity_initial_token_response_incomplete/);
   assert.throws(()=>validateInitialTokenResponse({...payload,scope:"openid email profile"}),/identity_initial_token_response_incomplete/);
 });
