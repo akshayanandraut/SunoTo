@@ -117,7 +117,7 @@ export async function createPkceChallenge(verifier,cryptoApi=globalThis.crypto){
 }
 
 export async function fetchOidcMetadata(fetcher=fetch){
-  const response=await fetcher(GRASANY_OIDC_PACKET.discoveryUrl,{headers:{accept:"application/json"}});
+  const response=await fetcher(GRASANY_OIDC_PACKET.discoveryUrl,{headers:{accept:"application/json"},redirect:"manual",signal:AbortSignal.timeout(5000)});
   if(!response.ok)throw new Error("identity_discovery_unavailable");
   const metadata=await response.json(),issuer=new URL(GRASANY_OIDC_PACKET.issuer),endpoints=[metadata.authorization_endpoint,metadata.token_endpoint,metadata.jwks_uri];
   if(metadata.issuer!==issuer.toString()||endpoints.some(value=>{try{const url=new URL(value);return url.protocol!=="https:"||url.origin!==issuer.origin||!url.pathname.startsWith(issuer.pathname+"/");}catch{return true;}}))throw new Error("identity_discovery_contract_invalid");
