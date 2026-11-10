@@ -11,7 +11,9 @@ describe("radio playback controls", () => {
     assert.equal(session.playbackState, "none");
     assert.equal(session.metadata.title, "Song");
     assert.deepEqual(session.metadata.artwork, [{ src: "/cover.jpg" }]);
-    assert.deepEqual([...handlers.keys()], ["play", "pause", "nexttrack"]);
+    assert.deepEqual([...handlers].filter(([, handler]) => handler).map(([name]) => name),
+      ["play", "pause", "stop", "nexttrack"]);
+    assert.equal(handlers.get("seekto"), null);
   });
 
   it("routes lock-screen controls to the live player and skip vote", async () => {
@@ -21,7 +23,9 @@ describe("radio playback controls", () => {
     await handlers.get("play")();
     handlers.get("pause")();
     handlers.get("nexttrack")();
-    assert.deepEqual(events, ["play", "pause", "skip-vote"]);
+    handlers.get("stop")();
+    assert.deepEqual(events, ["play", "pause", "skip-vote", "pause"]);
+    assert.equal(session.playbackState, "paused");
   });
 
   it("clears metadata and unsupported action handlers when leaving a radio channel", () => {
@@ -29,7 +33,8 @@ describe("radio playback controls", () => {
     syncRadioMediaSession(null, { mediaSession: session });
     assert.equal(session.metadata, null);
     assert.equal(session.playbackState, "none");
-    assert.deepEqual([...handlers.values()], [null, null, null]);
+    assert.equal(handlers.size, 8);
+    assert.ok([...handlers.values()].every(handler => handler === null));
   });
 
   it("enables device playback controls and only permits valid Media Session states", () => {
@@ -45,7 +50,7 @@ describe("radio playback controls", () => {
   });
 
   it("provides explicit loading, pause, retry and error feedback", () => {
-    assert.match(RADIO_PLAYBACK_MESSAGES.buffering, /Reconnecting/);
+    assert.match(RADIO_PLAYBACK_MESSAGES.buffering, /Buffering/);
     assert.match(RADIO_PLAYBACK_MESSAGES.blocked, /Press Play to try again/);
     assert.match(RADIO_PLAYBACK_MESSAGES.error, /retry/);
   });
@@ -56,7 +61,7 @@ describe("radio playback controls", () => {
       readFile(new URL("../web/js/views.js", import.meta.url), "utf8"),
     ]);
     assert.doesNotMatch(app, /nextRadioListenerCount|randomRadioListenerCount|spawnRadioReaction\(reactions\[.*createFriendlyHandle/);
-    assert.match(app, /function scheduleSyntheticRadioReaction\(\)\{\}/);
+    assert.doesNotMatch(app, /scheduleSyntheticRadioReaction|radioSyntheticTimer/);
     assert.doesNotMatch(views, /realListeners\|\|0\)\+15000/);
   });
 });

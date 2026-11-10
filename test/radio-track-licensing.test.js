@@ -6,7 +6,7 @@ import { RADIO_LICENSES,validRadioLicenseId } from "../worker/src/policies/radio
 describe("radio license policy", () => {
   it("only offers commercially-safe licenses", () => {
     const ids = RADIO_LICENSES.map(license => license.id);
-    assert.deepEqual(ids, ["cc0", "cc-by", "pixabay", "ccmixter", "fma-cc-by", "fma-cc0"]);
+    assert.deepEqual(ids, ["cc0", "cc-by", "ccmixter", "fma-cc-by", "fma-cc0"]);
   });
   it("never offers a non-commercial or unlabeled option", () => {
     for (const license of RADIO_LICENSES) {
@@ -16,6 +16,7 @@ describe("radio license policy", () => {
   it("validRadioLicenseId rejects anything outside the fixed list, including CC-BY-NC", () => {
     assert.equal(validRadioLicenseId("cc-by"), true);
     assert.equal(validRadioLicenseId("cc-by-nc"), false);
+    assert.equal(validRadioLicenseId("pixabay"), false);
     assert.equal(validRadioLicenseId(""), false);
     assert.equal(validRadioLicenseId(undefined), false);
   });
