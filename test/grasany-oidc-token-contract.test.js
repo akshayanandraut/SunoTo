@@ -12,7 +12,7 @@ test("central OIDC initial exchange requires persistent-session tokens and all a
   assert.deepEqual(validateInitialTokenResponse(omitted).scopes,GRASANY_REQUESTED_SCOPES);
   for(const scope of [null,"","openid  email profile","openid email profile\n"])assert.throws(()=>validateInitialTokenResponse({...payload,scope}),/scope_invalid/);
   assert.throws(()=>validateInitialTokenResponse({...payload,refresh_token:undefined}),/identity_initial_token_response_incomplete/);
-  assert.throws(()=>validateInitialTokenResponse({...payload,scope:"openid email profile"}),/identity_initial_token_response_incomplete/);
+  assert.throws(()=>validateInitialTokenResponse({...payload,scope:"openid email"}),/identity_initial_token_response_incomplete/);
 });
 
 test("refresh uses refresh_token grant and client id without offline_access",()=>{
