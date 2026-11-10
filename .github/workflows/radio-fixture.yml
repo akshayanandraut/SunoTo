@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 env:
-  FIXTURE_SHA: f59b1275929a393343a2e73965b69d1d0c52659a
+  FIXTURE_SHA: d28318eaf0b4c3a767c0e0fd694d502ceda216fb
 jobs:
   fixture:
     runs-on: ubuntu-24.04
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: f59b1275929a393343a2e73965b69d1d0c52659a
+          ref: d28318eaf0b4c3a767c0e0fd694d502ceda216fb
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -25,7 +25,7 @@ jobs:
           node --input-type=module - <<'JS'
           import assert from 'node:assert/strict';
           import {isBrowserBoundOidcState,completeGrasanyCallback,logoutGrasanySession,identityAcceptanceContext,readGrasanySession,getGrasanyPrincipal} from './worker/src/auth/grasanyIdentityFlow.js';
-          import {resolveVerifiedProductIdentity} from './worker/src/auth/supabaseIdentityAdapter.js';
+          import {resolveVerifiedProductIdentity,lookupSunotoProductIdentity} from './worker/src/auth/supabaseIdentityAdapter.js';
           import {GRASANY_OIDC_PACKET,getGrasanyIdentityReadiness} from './worker/src/auth/grasanyOidc.js';
           assert.equal(GRASANY_OIDC_PACKET.clientId,'689da8fc-ab29-4174-bc8c-f27509f4069d');
           assert.equal(getGrasanyIdentityReadiness().enabled,false);
@@ -35,6 +35,21 @@ jobs:
           assert.deepEqual(mapping.roles,[]);assert.deepEqual(mapping.entitlements,[]);
           assert.equal(await resolveVerifiedProductIdentity(principal,async()=>[row,row]),null);
           assert.equal(await resolveVerifiedProductIdentity({...principal,issuer:'https://wrong.invalid'},async()=>{throw Error('must not lookup')}),null);
+          const dbEnv={SUNOTO_PRODUCT_IDENTITY_LOOKUP:'1',SUPABASE_URL:'https://mybjgljylmcweeprhhlw.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'synthetic-not-a-key'};
+          const stored={issuer:principal.issuer,subject:principal.subject,account_id:row.accountId};
+          const db=async(url,options)=>{
+            assert.equal(url.origin,dbEnv.SUPABASE_URL);
+            assert.equal(url.pathname,'/rest/v1/grasany_identity_links');
+            assert.equal(url.searchParams.get('issuer'),'eq.'+principal.issuer);
+            assert.equal(url.searchParams.get('subject'),'eq.'+principal.subject);
+            assert.equal(options.method,'GET');assert.equal(options.redirect,'error');
+            assert.equal(options.headers.authorization,'Bearer synthetic-not-a-key');
+            return Response.json([stored]);
+          };
+          assert.equal((await lookupSunotoProductIdentity(dbEnv,principal,db)).identity.accountId,row.accountId);
+          assert.equal((await lookupSunotoProductIdentity(dbEnv,principal,async()=>Response.json([]))).status,'not_linked');
+          assert.equal((await lookupSunotoProductIdentity(dbEnv,principal,async()=>Response.json({}, {status:403}))).status,'service_unavailable');
+          assert.equal((await lookupSunotoProductIdentity({...dbEnv,SUPABASE_URL:'https://wrong.invalid'},principal,async()=>{throw Error('must not send key')})).status,'service_unavailable');
           let deletes=0,fail=false;
           const env={IDENTITY_SESSIONS:{idFromName:x=>x,get:()=>({fetch:async (url,init)=>{
             if(init.method==='DELETE'){deletes++;return new Response(null,{status:fail?500:204});}
