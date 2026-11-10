@@ -2,7 +2,7 @@
 
 
 - **Radio launch, 2026-11-10:** Curated radio is live at 100% on Cloudflare Worker version `8e1b026d-9df9-4df1-a6da-a02bf0da140a` (source `c87027b`). Imported 20 verified CC0 tracks into the original SunoTo project and private R2, fixed audio recreation and empty queue restart, and passed 16 focused checks. Live guest delivery matched two source hashes and passed signed range checks. Desktop Edge played through a track change and recovered after reload. Pending physical iPhone and Android screen-lock playback and controls. See [radio launch evidence](docs/radio-launch-20261101.md).
-- **Identity candidate, 2026-11-10:** Combined the live radio source with the four runtime identity files and two tests from the provider-accepted revision `64f7b2d`. The Worker config still points to the original session namespace and private radio bucket. Public identity remains gated. Pending production key inventory, canonical sign-in, reload, refresh and logout acceptance before enabling public sign-in.
+- **Identity candidate, 2026-11-10:** Combined the live radio source with the four runtime identity files and two tests from the provider-accepted revision `64f7b2d`. Cloudflare metadata confirms that the active radio Worker retained the original session namespace but inherited acceptance configuration absent from the pre-radio version. The live source has no acceptance handlers and the canonical sign-in endpoint returns 503. Secret values are unavailable in version metadata, so production encryption key provenance is unresolved. Pending a reviewed radio-preserving binding cleanup, key continuity verification, and canonical sign-in, reload, refresh and logout acceptance.
 
 ## SEO-only candidate — 2026-11-01
 
