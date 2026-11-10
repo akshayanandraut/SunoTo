@@ -44,7 +44,7 @@ test("controlled OIDC lifecycle keeps provider tokens and product authority isol
     assert.equal(createHash("sha256").update(init.body.get("code_verifier")).digest("base64url"),authorization.searchParams.get("code_challenge"));
     const iat=Math.floor(Date.now()/1000),nonce=authorization.searchParams.get("nonce");
     const payload=jwtPart({alg:"RS256",kid:"fixture"})+"."+jwtPart({iss:packet.issuer,aud:packet.clientId,sub:"synthetic-user",nonce,iat,exp:iat+300});
-    return Response.json({access_token:"synthetic-access-1",refresh_token:"synthetic-refresh-1",id_token:payload+"."+sign("RSA-SHA256",Buffer.from(payload),privateKey).toString("base64url"),token_type:"Bearer",expires_in:3600,scope:packet.scopes.join(" ")});
+    return Response.json({access_token:"synthetic-access-1",refresh_token:"synthetic-refresh-1",id_token:payload+"."+sign("RSA-SHA256",Buffer.from(payload),privateKey).toString("base64url"),token_type:"Bearer",expires_in:3600});
   };
   const req=(path,opts={})=>new Request(packet.proposedOrigin+path,{...opts,headers:{"x-sunoto-identity-acceptance":guard,...opts.headers}});
   const start=await beginGrasanyLogin(req("/api/v1/auth/grasany/start?return_to=%2F%23party"),env,{fetcher});
