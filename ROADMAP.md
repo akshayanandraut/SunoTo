@@ -1,7 +1,7 @@
 # SunoTo — Codex-Ready Product & Engineering Roadmap
 
 
-- **Radio launch, 2026-11-10:** Verified live R2 and the guest channel directory, acquired 20 publisher-sourced CC0 tracks with checksums and measured durations, and fixed audio recreation during player redraws. Enabled the existing production bucket binding in the candidate and passed 15 focused tests plus Wrangler dry-run packaging. Pending catalog import, coordinated player deployment, and physical iPhone/Android playback and recovery acceptance. See [radio launch evidence](docs/radio-launch-20261101.md).
+- **Radio launch, 2026-11-10:** Verified live R2 and the guest channel directory, acquired 20 publisher-sourced CC0 tracks with checksums and measured durations, and fixed audio recreation during player redraws. Enabled the existing production bucket binding in the candidate and passed 15 focused tests plus Wrangler dry-run packaging. Uploaded and checksum-verified all 20 private R2 objects and set the canonical media URL in the candidate. Pending curated metadata import, coordinated player deployment, and physical iPhone/Android playback and recovery acceptance. See [radio launch evidence](docs/radio-launch-20261101.md).
 
 ## SEO-only candidate — 2026-11-01
 

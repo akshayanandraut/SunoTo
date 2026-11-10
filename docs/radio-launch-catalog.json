@@ -1,6 +1,5 @@
 {
-  "verifiedAt": "2026-11-10T06:07:49.471365+00:00",
-  "publisherPageSha256": "2708b49b6e63a610bcccdc99d08be962d4476f01c88c72e7c7588b75c63fe12d",
+  "room": "00000000-0000-0000-0000-000000000001",
   "tracks": [
     {
       "id": "acoustic-folk-01",
@@ -12,7 +11,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 90.024,
       "bytes": 3602207,
-      "sha256": "bc25eecebfafe708b432c50b43bb088e685f4608cc6451f38f9493b6801409d3"
+      "sha256": "bc25eecebfafe708b432c50b43bb088e685f4608cc6451f38f9493b6801409d3",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-acoustic-folk-01-bc25eecebfafe708.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-acoustic-folk-01"
     },
     {
       "id": "acoustic-folk-02",
@@ -24,7 +26,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 90.024,
       "bytes": 3602210,
-      "sha256": "eaf4a5fada0572520f1978422bbc8c46a9d6870386eb0fc955dd26011e6c2360"
+      "sha256": "eaf4a5fada0572520f1978422bbc8c46a9d6870386eb0fc955dd26011e6c2360",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-acoustic-folk-02-eaf4a5fada057252.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-acoustic-folk-02"
     },
     {
       "id": "acoustic-folk-03",
@@ -36,7 +41,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 120.024,
       "bytes": 4802212,
-      "sha256": "0aac2343bad6f1c249958f9249951ad55f04a24cba30f7c02589d49d02fe0e9c"
+      "sha256": "0aac2343bad6f1c249958f9249951ad55f04a24cba30f7c02589d49d02fe0e9c",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-acoustic-folk-03-0aac2343bad6f1c2.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-acoustic-folk-03"
     },
     {
       "id": "acoustic-folk-04",
@@ -48,7 +56,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 120.024,
       "bytes": 4802208,
-      "sha256": "0881bc87ac61fbe972dd2d21e6544fb81447195dc2e286ae9de67d9439c7a779"
+      "sha256": "0881bc87ac61fbe972dd2d21e6544fb81447195dc2e286ae9de67d9439c7a779",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-acoustic-folk-04-0881bc87ac61fbe9.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-acoustic-folk-04"
     },
     {
       "id": "acoustic-folk-05",
@@ -60,7 +71,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 90.024,
       "bytes": 3602211,
-      "sha256": "6638c020855f3f77f810525be3e528b125a53f9302cda372a96271aae8782b7c"
+      "sha256": "6638c020855f3f77f810525be3e528b125a53f9302cda372a96271aae8782b7c",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-acoustic-folk-05-6638c020855f3f77.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-acoustic-folk-05"
     },
     {
       "id": "acoustic-folk-06",
@@ -72,7 +86,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 90.024,
       "bytes": 3602210,
-      "sha256": "289731f68e8e7f38ade50f065e023c360c06b7d52ecc34b7a8da41d262d4bd79"
+      "sha256": "289731f68e8e7f38ade50f065e023c360c06b7d52ecc34b7a8da41d262d4bd79",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-acoustic-folk-06-289731f68e8e7f38.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-acoustic-folk-06"
     },
     {
       "id": "acoustic-folk-07",
@@ -84,7 +101,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 120.024,
       "bytes": 4802211,
-      "sha256": "dfda5c1386fee7f65d9f757ac36a759f2f437f1de6c352de7a9f7b93988ababc"
+      "sha256": "dfda5c1386fee7f65d9f757ac36a759f2f437f1de6c352de7a9f7b93988ababc",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-acoustic-folk-07-dfda5c1386fee7f6.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-acoustic-folk-07"
     },
     {
       "id": "acoustic-folk-08",
@@ -96,7 +116,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 120.024,
       "bytes": 4802209,
-      "sha256": "5dc304c5ceec10bfa20209cc675cd99dd3b6848c3bc4eb9b52d78868d7de19a7"
+      "sha256": "5dc304c5ceec10bfa20209cc675cd99dd3b6848c3bc4eb9b52d78868d7de19a7",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-acoustic-folk-08-5dc304c5ceec10bf.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-acoustic-folk-08"
     },
     {
       "id": "acoustic-folk-09",
@@ -108,7 +131,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 90.024,
       "bytes": 3602206,
-      "sha256": "38df4aafaf3238be3d2f26092d8da77ffd22541cbf25dce47fd62875db6f70d7"
+      "sha256": "38df4aafaf3238be3d2f26092d8da77ffd22541cbf25dce47fd62875db6f70d7",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-acoustic-folk-09-38df4aafaf3238be.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-acoustic-folk-09"
     },
     {
       "id": "acoustic-folk-10",
@@ -120,7 +146,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 90.024,
       "bytes": 3602210,
-      "sha256": "035055b4ee281ef508cc5d47e2c5b4733733fc6340b39090922e0cb8cebb31d0"
+      "sha256": "035055b4ee281ef508cc5d47e2c5b4733733fc6340b39090922e0cb8cebb31d0",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-acoustic-folk-10-035055b4ee281ef5.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-acoustic-folk-10"
     },
     {
       "id": "action-score-01",
@@ -132,7 +161,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 120.024,
       "bytes": 4802207,
-      "sha256": "5aa73a2b6eed2031d561d7387223f7c7ac06ddac20315dddb8aeb53477f33d50"
+      "sha256": "5aa73a2b6eed2031d561d7387223f7c7ac06ddac20315dddb8aeb53477f33d50",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-action-score-01-5aa73a2b6eed2031.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-action-score-01"
     },
     {
       "id": "action-score-02",
@@ -144,7 +176,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 120.024,
       "bytes": 4802211,
-      "sha256": "23dfb772ec4faaa60028aa781d4369ff226029d44c3f31572e57959cceac300c"
+      "sha256": "23dfb772ec4faaa60028aa781d4369ff226029d44c3f31572e57959cceac300c",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-action-score-02-23dfb772ec4faaa6.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-action-score-02"
     },
     {
       "id": "action-score-03",
@@ -156,7 +191,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 60.024,
       "bytes": 2402211,
-      "sha256": "1280902fde354a9c29ada5792fa401417f55ed671095297577d7e8b37127964e"
+      "sha256": "1280902fde354a9c29ada5792fa401417f55ed671095297577d7e8b37127964e",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-action-score-03-1280902fde354a9c.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-action-score-03"
     },
     {
       "id": "action-score-04",
@@ -168,7 +206,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 60.024,
       "bytes": 2402210,
-      "sha256": "f6881362aacde019b0d255981c25b025a4bc0f38a070ce05ec74ca3a5546aef0"
+      "sha256": "f6881362aacde019b0d255981c25b025a4bc0f38a070ce05ec74ca3a5546aef0",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-action-score-04-f6881362aacde019.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-action-score-04"
     },
     {
       "id": "action-score-05",
@@ -180,7 +221,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 90.024,
       "bytes": 3602210,
-      "sha256": "5c586a501b0a02bc64535d6a1c2c33aed72523e91ee5cad3db8b83e6d55984be"
+      "sha256": "5c586a501b0a02bc64535d6a1c2c33aed72523e91ee5cad3db8b83e6d55984be",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-action-score-05-5c586a501b0a02bc.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-action-score-05"
     },
     {
       "id": "action-score-06",
@@ -192,7 +236,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 90.024,
       "bytes": 3602207,
-      "sha256": "8518ab8272121193dd5ba4dd0bc28f07aa0a2ede4da02f659b4e2aaff503a4aa"
+      "sha256": "8518ab8272121193dd5ba4dd0bc28f07aa0a2ede4da02f659b4e2aaff503a4aa",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-action-score-06-8518ab8272121193.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-action-score-06"
     },
     {
       "id": "action-score-07",
@@ -204,7 +251,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 60.024,
       "bytes": 2402208,
-      "sha256": "82100b02957e2b7fdb87c392789c0689f36f9ca66118c7341c6a561040d0fbc4"
+      "sha256": "82100b02957e2b7fdb87c392789c0689f36f9ca66118c7341c6a561040d0fbc4",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-action-score-07-82100b02957e2b7f.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-action-score-07"
     },
     {
       "id": "action-score-08",
@@ -216,7 +266,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 60.024,
       "bytes": 2402207,
-      "sha256": "8f3d58d615395682221627675873434476a459b799441e716a056de5c25c92a9"
+      "sha256": "8f3d58d615395682221627675873434476a459b799441e716a056de5c25c92a9",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-action-score-08-8f3d58d615395682.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-action-score-08"
     },
     {
       "id": "afrobeat-01",
@@ -228,7 +281,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 150.024,
       "bytes": 6002203,
-      "sha256": "e342d33d869784401fa1a036dac1bd7fefa0a1faae51c197463fb019d44a65f6"
+      "sha256": "e342d33d869784401fa1a036dac1bd7fefa0a1faae51c197463fb019d44a65f6",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-afrobeat-01-e342d33d86978440.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-afrobeat-01"
     },
     {
       "id": "afrobeat-02",
@@ -240,7 +296,10 @@
       "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode",
       "durationSeconds": 150.024,
       "bytes": 6002206,
-      "sha256": "f0aea1d1c45f56b937ce59937172c7feffb22cef1e1e7849067c73c762dd1ef9"
+      "sha256": "f0aea1d1c45f56b937ce59937172c7feffb22cef1e1e7849067c73c762dd1ef9",
+      "objectKey": "radio/00000000-0000-0000-0000-000000000001/kainotomic-cc0-20261110-afrobeat-02-f0aea1d1c45f56b9.mp3",
+      "contentType": "audio/mpeg",
+      "attributionText": "Kainotomic \u00b7 CC0 1.0 \u00b7 https://kaino.dev/library/music#asset-afrobeat-02"
     }
   ]
 }
